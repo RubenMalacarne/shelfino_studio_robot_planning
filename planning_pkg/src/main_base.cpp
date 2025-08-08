@@ -25,25 +25,16 @@ class PathGenerator : public rclcpp::Node
 public:
   PathGenerator() : Node("path_generator")
   {
-    // Evita ParameterAlreadyDeclaredException
     if (!this->has_parameter("use_sim_time")) {
-      this->declare_parameter<bool>("use_sim_time", true);   // dichiara solo se manca
+      RCLCPP_WARN(this->get_logger(), "use sim time!!!!!!!!!");
+      this->declare_parameter<bool>("use_sim_time", true);   
     }
-    // Se vuoi forzarlo a true (solo se necessario):
-    // this->set_parameter(rclcpp::Parameter("use_sim_time", true));
-
-    // Publisher del path (transient_local se vuoi latched-like)
-    // auto qos = rclcpp::QoS(rclcpp::KeepLast(1)).reliable();
     const auto qos = rclcpp::QoS(rclcpp::KeepLast(1), qos_profile_custom1);
-    // qos.transient_local();  // scommenta se vuoi che resti “latched”
     path1_publisher_ = this->create_publisher<nav_msgs::msg::Path>("shelfino1/plan1", qos);
 
 
     subscription_position1_ = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
       "/shelfino1/amcl_pose", qos, std::bind(&PathGenerator::callback_pos1, this, std::placeholders::_1));
-
-    // Timer: pubblica ogni 5 s (oppure cancella il timer dopo la prima pubblicazione)
-    // timer_ = this->create_wall_timer(5s, std::bind(&PathGenerator::publish_path_once, this));
   }
 
 private:
@@ -70,9 +61,6 @@ private:
     }
     path1_publisher_->publish(path1);
     RCLCPP_INFO(this->get_logger(), "Published path for shelfino1 (%zu poses).", path1.poses.size());
-
-    // Se vuoi pubblicare UNA SOLA VOLTA:
-    // timer_->cancel();
   }
   nav_msgs::msg::Path generate_path_for_shelfino1()
   {
@@ -80,8 +68,8 @@ private:
     rclcpp::Time stamp = this->get_clock()->now();
     path.header.stamp = stamp;
     path.header.frame_id = "map";
-
-    // Lista dei waypoint principali
+    
+    //waypoints 
     std::vector<std::pair<double, double>> waypoints = {
         {current_position_.position.x, current_position_.position.y},
         {5.0, 0.0},
@@ -127,7 +115,6 @@ private:
 
   rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr subscription_position1_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path1_publisher_;
-  rclcpp::TimerBase::SharedPtr timer_;
   geometry_msgs::msg::Pose current_position_;
   bool published_ = false;
 };
@@ -136,7 +123,7 @@ int main(int argc, char* argv[])
 {
   rclcpp::init(argc, argv);
   auto node = std::make_shared<PathGenerator>();
-  RCLCPP_INFO(node->get_logger(), "Path generator started. Publishing every 5s...");
+  RCLCPP_INFO(node->get_logger(), "Path generator started.");
   rclcpp::spin(node);
   rclcpp::shutdown();
   return 0;

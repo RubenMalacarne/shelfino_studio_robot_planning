@@ -41,7 +41,6 @@ endif()
 
 add_executable(main_base
   src/main_base.cpp
-  src/utils/dubinscurve.cpp
   src/utils/re_mapping.cpp
 )
 
