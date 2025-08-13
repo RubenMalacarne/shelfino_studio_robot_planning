@@ -7,19 +7,10 @@
 #include "geometry_msgs/msg/pose_with_covariance_stamped.hpp"
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+
+#include "planning_pkg/common.hpp"
+
 using namespace std::chrono_literals;
-
-static const rmw_qos_profile_t qos_profile_custom1 = {
-    RMW_QOS_POLICY_HISTORY_KEEP_LAST,
-    10,
-    RMW_QOS_POLICY_RELIABILITY_RELIABLE,
-    RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL,
-    RMW_QOS_DEADLINE_DEFAULT,
-    RMW_QOS_LIFESPAN_DEFAULT,
-    RMW_QOS_POLICY_LIVELINESS_SYSTEM_DEFAULT,
-    RMW_QOS_LIVELINESS_LEASE_DURATION_DEFAULT,
-    false};
-
 class PathGenerator : public rclcpp::Node
 {
 public:
@@ -27,14 +18,17 @@ public:
   {
     if (!this->has_parameter("use_sim_time")) {
       RCLCPP_WARN(this->get_logger(), "use sim time!!!!!!!!!");
-      this->declare_parameter<bool>("use_sim_time", true);   
+      this->declare_parameter<bool>("use_sim_time", true);
     }
-    const auto qos = rclcpp::QoS(rclcpp::KeepLast(1), qos_profile_custom1);
+
+    const auto qos = rclcpp::QoS(rclcpp::KeepLast(1), planning_pkg::qos::qos_profile_custom1);
     path1_publisher_ = this->create_publisher<nav_msgs::msg::Path>("shelfino1/plan1", qos);
 
-
     subscription_position1_ = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
-      "/shelfino1/amcl_pose", qos, std::bind(&PathGenerator::callback_pos1, this, std::placeholders::_1));
+      "/shelfino1/amcl_pose",
+      qos,
+      std::bind(&PathGenerator::callback_pos1, this, std::placeholders::_1)
+    );
   }
 
 private:

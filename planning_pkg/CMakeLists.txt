@@ -20,6 +20,7 @@ find_package(tf2 REQUIRED)
 find_package(nav2_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
@@ -41,7 +42,14 @@ endif()
 
 add_executable(main_base
   src/main_base.cpp
+)
+
+add_executable(re_mapping
   src/utils/re_mapping.cpp
+)
+
+add_executable(nav2_pathclient
+  src/utils/nav2_pathclient.cpp
 )
 
 ament_target_dependencies(main_base
@@ -50,18 +58,18 @@ ament_target_dependencies(main_base
   nav_msgs
   tf2
   tf2_geometry_msgs
+  obstacles_msgs
 )
-target_include_directories(main_base PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-
-
-install(TARGETS
-main_base
-DESTINATION lib/${PROJECT_NAME}
+ament_target_dependencies(re_mapping
+  rclcpp
+  geometry_msgs
+  obstacles_msgs
+  tf2
+  visualization_msgs
+  std_srvs
 )
-add_executable(nav2_pathclient
-  src/utils/nav2_pathclient.cpp
-)
+
 
 ament_target_dependencies(nav2_pathclient
   rclcpp
@@ -75,12 +83,18 @@ ament_target_dependencies(nav2_pathclient
   visualization_msgs
   obstacles_msgs
 )
+target_include_directories(main_base PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(re_mapping PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(nav2_pathclient PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
-install(TARGETS nav2_pathclient
-  DESTINATION lib/${PROJECT_NAME}
-)
 
-  
+
+
+install(TARGETS
+main_base
+re_mapping
+nav2_pathclient
+DESTINATION lib/${PROJECT_NAME}
+)
 
 ament_package()
