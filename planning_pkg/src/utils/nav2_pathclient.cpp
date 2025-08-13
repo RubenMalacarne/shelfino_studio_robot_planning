@@ -6,48 +6,124 @@
 #include <memory>
 #include <string>
 
-#include "geometry_msgs/msg/point.hpp"
-#include "geometry_msgs/msg/pose.hpp"
-#include "geometry_msgs/msg/pose_array.hpp"
+#include "rclcpp/rclcpp.hpp"
+#include "rclcpp_action/rclcpp_action.hpp"
+
 #include "geometry_msgs/msg/pose_stamped.hpp"
-#include "geometry_msgs/msg/quaternion.hpp"
-#include "geometry_msgs/msg/transform_stamped.hpp"
-#include "geometry_msgs/msg/twist.hpp"
 #include "nav2_msgs/action/follow_path.hpp"
 #include "nav_msgs/msg/path.hpp"
-#include "rclcpp_action/rclcpp_action.hpp"
-#include "rclcpp_components/register_node_macro.hpp"
-#include "std_msgs/msg/string.hpp"
-#include "tf2/exceptions.h"
-#include "tf2_ros/buffer.h"
 
 using FollowPath = nav2_msgs::action::FollowPath;
+
 class PathPublisher : public rclcpp::Node
 {
 public:
   PathPublisher() : Node("Nav2Client")
   {
-    client1_ptr_ =
-        rclcpp_action::create_client<FollowPath>(this, "shelfino1/follow_path");
+    // Action clients (nomi come in Nav2 multi-robot)
+    client1_ptr_ = rclcpp_action::create_client<FollowPath>(this, "/shelfino1/follow_path");
+    client2_ptr_ = rclcpp_action::create_client<FollowPath>(this, "/shelfino2/follow_path");
 
+    // Sottoscrizioni ai topic path del planner (quelli pubblicati dal tuo PathPlanningOrchestratorClient)
+    auto qos = rclcpp::QoS(rclcpp::KeepLast(1));
     _path_subscription1 = this->create_subscription<nav_msgs::msg::Path>(
-        "shelfino1/plan1", 10,
+        "/path_pos1_to_gates", qos,
         std::bind(&PathPublisher::store_path1, this, std::placeholders::_1));
 
-    client2_ptr_ = rclcpp_action::create_client<FollowPath>(this, "shelfino2/follow_path");
-
     _path_subscription2 = this->create_subscription<nav_msgs::msg::Path>(
-        "shelfino2/plan1", 10,
+        "/path_pos2_to_gates", qos,
         std::bind(&PathPublisher::store_path2, this, std::placeholders::_1));
 
-    if (!this->client1_ptr_->wait_for_action_server() && !this->client2_ptr_->wait_for_action_server())
-    {
-      RCLCPP_ERROR(this->get_logger(),
-                   "Action server not available after waiting");
-      rclcpp::shutdown();
+    // Attendi i due action server (con timeout per non bloccare in eterno)
+    if (!client1_ptr_->wait_for_action_server(std::chrono::seconds(10))) {
+      RCLCPP_ERROR(this->get_logger(), "Action server /shelfino1/follow_path non disponibile.");
+    } else {
+      RCLCPP_INFO(this->get_logger(), "Action server /shelfino1/follow_path OK.");
     }
-    std::cout << "Action clients ready" << std::endl;
+
+    if (!client2_ptr_->wait_for_action_server(std::chrono::seconds(10))) {
+      RCLCPP_ERROR(this->get_logger(), "Action server /shelfino2/follow_path non disponibile.");
+    } else {
+      RCLCPP_INFO(this->get_logger(), "Action server /shelfino2/follow_path OK.");
+    }
+
+    RCLCPP_INFO(this->get_logger(), "Nav2Client pronto. In attesa dei path...");
   }
+
+private:
+
+  // ===== Helpers =====
+  void send_path_goal_(const rclcpp_action::Client<FollowPath>::SharedPtr &client,
+                       const nav_msgs::msg::Path &path,
+                       const std::string &who)
+  {
+    if (!client || !client->action_server_is_ready()) {
+      RCLCPP_ERROR(this->get_logger(), "[%s] action server non pronto.", who.c_str());
+      return;
+    }
+    if (path.poses.empty()) {
+      RCLCPP_WARN(this->get_logger(), "[%s] path vuoto, goal NON inviato.", who.c_str());
+      return;
+    }
+
+    FollowPath::Goal goal;
+    goal.path = path;
+    goal.controller_id = "";       // usa controller di default
+    goal.goal_checker_id = "";     // usa goal checker di default
+    //da controllare !!!!
+    rclcpp_action::Client<FollowPath>::SendGoalOptions opts;
+    opts.goal_response_callback =
+        [this, who](std::shared_ptr<rclcpp_action::ClientGoalHandle<FollowPath>> handle) {
+          if (!handle) {
+            RCLCPP_ERROR(this->get_logger(), "[%s] goal REJECTED.", who.c_str());
+          } else {
+            RCLCPP_INFO(this->get_logger(), "[%s] goal ACCEPTED.", who.c_str());
+          }
+        };
+    opts.result_callback =
+        [this, who](const rclcpp_action::ClientGoalHandle<FollowPath>::WrappedResult &res) {
+          switch (res.code) {
+            case rclcpp_action::ResultCode::SUCCEEDED:
+              RCLCPP_INFO(this->get_logger(), "[%s] goal COMPLETATO.", who.c_str());
+              break;
+            case rclcpp_action::ResultCode::ABORTED:
+              RCLCPP_ERROR(this->get_logger(), "[%s] goal ABORTITO.", who.c_str());
+              break;
+            case rclcpp_action::ResultCode::CANCELED:
+              RCLCPP_WARN(this->get_logger(), "[%s] goal CANCELLATO.", who.c_str());
+              break;
+            default:
+              RCLCPP_ERROR(this->get_logger(), "[%s] risultato sconosciuto.", who.c_str());
+              break;
+          }
+        };
+
+    client->async_send_goal(goal, opts);
+  }
+
+  // ===== Callbacks =====
+  void store_path1(const nav_msgs::msg::Path &msg)
+  {
+    full_path1 = msg;
+    // Assicura header coerente (se vuoi forzare)
+    full_path1.header.stamp = this->get_clock()->now();
+    if (full_path1.header.frame_id.empty()) full_path1.header.frame_id = "map";
+
+    RCLCPP_INFO(this->get_logger(), "Path 1 ricevuto: %zu poses. Invio a shelfino1...", full_path1.poses.size());
+    send_path_goal_(client1_ptr_, full_path1, "shelfino1");
+  }
+
+  void store_path2(const nav_msgs::msg::Path &msg)
+  {
+    full_path2 = msg;
+    full_path2.header.stamp = this->get_clock()->now();
+    if (full_path2.header.frame_id.empty()) full_path2.header.frame_id = "map";
+
+    RCLCPP_INFO(this->get_logger(), "Path 2 ricevuto: %zu poses. Invio a shelfino2...", full_path2.poses.size());
+    send_path_goal_(client2_ptr_, full_path2, "shelfino2");
+  }
+
+  // ===== Membri =====
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr _path_subscription1;
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr _path_subscription2;
 
@@ -56,74 +132,13 @@ public:
 
   nav_msgs::msg::Path full_path1;
   nav_msgs::msg::Path full_path2;
-
-  bool waypoints1_received = false;
-  bool waypoints2_received = false;
-
-  void store_path1(const nav_msgs::msg::Path &msg)
-  {
-    if (waypoints1_received)
-    {
-      return;
-    }
-    full_path1 = msg;
-    std::cout << "Path 1 stored!" << std::endl;
-    waypoints1_received = true;
-    return;
-  }
-  void store_path2(const nav_msgs::msg::Path &msg)
-  {
-    if (waypoints2_received)
-    {
-      return;
-    }
-    full_path2 = msg;
-    std::cout << "Path 2 stored!" << std::endl;
-    waypoints2_received = true;
-    return;
-  }
 };
 
 int main(int argc, char *argv[])
 {
   rclcpp::init(argc, argv);
   auto node = std::make_shared<PathPublisher>();
-  while (rclcpp::ok())
-  {
-    if (node->waypoints1_received)
-    // if (node->waypoints1_received && node->waypoints2_received)
-    {
-      std::cout << "\033[1;32mSending paths to controllers\033[0m" << std::endl;
-      // nav_msgs::msg::Path full_path1;
-      node->full_path1.header.stamp = node->get_clock()->now();
-      node->full_path1.header.frame_id = "map";
-
-      // node->full_path2.header.stamp = node->get_clock()->now();
-      // node->full_path2.header.frame_id = "map";
-
-      auto goal1_msg = FollowPath::Goal();
-      // auto goal2_msg = FollowPath::Goal();
-      goal1_msg.path = node->full_path1;
-      // goal2_msg.path = node->full_path2;
-      goal1_msg.controller_id = "FollowPath";
-      // goal2_msg.controller_id = "FollowPath";
-      node->client1_ptr_->async_send_goal(goal1_msg);
-      // node->client2_ptr_->async_send_goal(goal2_msg);
-      rclcpp::sleep_for(std::chrono::milliseconds(300));
-      // ensure that the path is sent
-      node->client1_ptr_->async_send_goal(goal1_msg);
-      // node->client2_ptr_->async_send_goal(goal2_msg);
-      rclcpp::sleep_for(std::chrono::milliseconds(300));
-      // ensure that the path is sent
-      node->client1_ptr_->async_send_goal(goal1_msg);
-      // node->client2_ptr_->async_send_goal(goal2_msg);
-      node->waypoints1_received = false;
-      // node->waypoints2_received = false;
-    }
-    rclcpp::spin_some(node);
-  }
-
+  rclcpp::spin(node);
   rclcpp::shutdown();
-
   return 0;
 }

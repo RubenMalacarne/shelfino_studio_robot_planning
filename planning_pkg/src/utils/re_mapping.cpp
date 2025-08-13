@@ -1,21 +1,19 @@
 #include "planning_pkg/re_mapping.hpp"
 #include "planning_pkg/common.hpp"
 
-
 #include <memory>
 #include "rclcpp/rclcpp.hpp"
 
-
 ReMapping::ReMapping() : Node("ReMapping")
 {
-  // Define QoS profile
+  
   const auto qos = rclcpp::QoS(rclcpp::KeepLast(1), planning_pkg::qos::qos_profile_custom1);
 
   this->declare_parameter("shelfino_inflation", 0.5);
   this->declare_parameter("marker_frame", "map");
   inflation_value = get_shelfino_inflation();
 
-  // Create subscribers
+  // Subscribers
   subscription_borders = this->create_subscription<geometry_msgs::msg::Polygon>(
       "/map_borders", qos, std::bind(&ReMapping::callback_borders, this, std::placeholders::_1));
   subscription_obstacles = this->create_subscription<obstacles_msgs::msg::ObstacleArrayMsg>(
@@ -26,29 +24,31 @@ ReMapping::ReMapping() : Node("ReMapping")
       "/shelfino1/amcl_pose", qos, std::bind(&ReMapping::callback_pos1, this, std::placeholders::_1));
   subscription_position2 = this->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
       "/shelfino3/amcl_pose", qos, std::bind(&ReMapping::callback_pos2, this, std::placeholders::_1));
+  
+  // Publishers
+  pub_markers_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/inflated_obstacles", qos);
+  pub_arena_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/arena_markers", qos);
+  pub_gates_ = this->create_publisher<geometry_msgs::msg::PoseArray>("/published_gates", qos);
+  pub_pos1_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("/published_pos1", qos);
+  pub_pos2_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("/published_pos2", qos);
 
-
-  // Create publishers
-  pub_markers_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/inflated_obstacles", 10);
-  pub_arena_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/arena_markers", 10);
-  // Create service
+  // Service
   srv_trigger = this->create_service<std_srvs::srv::Trigger>(
-    "/publish_inflated",   // nome del service
+    "/service_trigger_inflated",   // nome del service
     std::bind(&ReMapping::on_trigger, this, std::placeholders::_1, std::placeholders::_2)
   );
-  // ros2 service call /publish_inflated std_srvs/srv/Trigger {}
+  // ros2 service call /service_trigger_inflated std_srvs/srv/Trigger {}
   }
 
 
 ReMapping::~ReMapping(){}
 
-//  ==== callback methods ==== 
+//  ==== Callback methods ==== 
 void ReMapping::callback_borders(const geometry_msgs::msg::Polygon::SharedPtr msg)
 {
   subscription_borders.reset();
   if (!msg->points.empty()) {
     RCLCPP_INFO(this->get_logger(), "Received the arena");
-    //TO DO: function to handle null arena
     this->set_borders(*msg);
     borders_received = true;  
   }
@@ -74,7 +74,6 @@ void ReMapping::callback_gates(const geometry_msgs::msg::PoseArray::SharedPtr ms
     subscription_gates.reset();
     if (!msg->poses.empty()) {
         RCLCPP_INFO(this->get_logger(), "Received gates");
-        //TO DO: function to handle gates
         this->set_gates(*msg);
         gates_received = true;
     } else {
@@ -85,7 +84,7 @@ void ReMapping::callback_gates(const geometry_msgs::msg::PoseArray::SharedPtr ms
 void ReMapping::callback_pos1(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg)
 {
   if (msg->pose.pose.position.x != 0.0 || msg->pose.pose.position.y != 0.0) {
-    RCLCPP_INFO(this->get_logger(), "Received pos");
+    RCLCPP_INFO(this->get_logger(), "Received pos2");
     subscription_position1.reset();
     //function to handle position 1
     this->set_pos1(*msg);
@@ -98,7 +97,7 @@ void ReMapping::callback_pos1(const geometry_msgs::msg::PoseWithCovarianceStampe
 void ReMapping::callback_pos2(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg)
 {
   if( msg->pose.pose.position.x != 0.0 || msg->pose.pose.position.y != 0.0) {
-    RCLCPP_WARN(this->get_logger(), "Received pos");
+    RCLCPP_INFO(this->get_logger(), "Received pos2");
     subscription_position2.reset();
     this->set_pos2(*msg);
     //function to handle position 2
@@ -108,40 +107,74 @@ void ReMapping::callback_pos2(const geometry_msgs::msg::PoseWithCovarianceStampe
   }
 }
 
-// ==== service callback ====
-void ReMapping::on_trigger(
-  const std::shared_ptr<std_srvs::srv::Trigger::Request> /*request*/,
-  std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+// ==== Service callback ====
+void ReMapping::on_trigger(const std::shared_ptr<std_srvs::srv::Trigger::Request>, std::shared_ptr<std_srvs::srv::Trigger::Response> response)
 {
+  std::string status_msg = "Published: ";
+  bool success = false;
+  
   if (have_obstacles_) {
     pub_markers_->publish(last_marker_array_);
     RCLCPP_INFO(this->get_logger(), "Published inflated obstacles to RViz2.");
+    status_msg += "obstacles ";
+    success = true;
   }
   
   if (have_borders_) {
     pub_arena_->publish(last_marker_array_borders_);
     RCLCPP_INFO(this->get_logger(), "Published inflated arena to RViz2.");
+    status_msg += "arena ";
+    success = true;
   }
+  
+  // Publish gates
+  if (!gates.empty()) {
+    RCLCPP_INFO(this->get_logger(), "Published gates: %zu gates", gates.size());
+    status_msg += "gates ";
+    publish_gates();
+    success = true;
+  }
+  //print the gates
+  // if (!gates.empty()) {
+  //   RCLCPP_INFO(this->get_logger(), "Gates:");
+  //   for (const auto &gate : gates) {
+  //     RCLCPP_INFO(this->get_logger(), "Gate: x=%.2f, y=%.2f, yaw=%.2f",
+  //                 gate[0], gate[1], gate[2]);
+  //   }
+  //} 
   else {
-    response->success = false;
-    response->message = "No inflated to publish.";
-    RCLCPP_WARN(this->get_logger(), "No inflated obstacles to publish.");
+    RCLCPP_WARN(this->get_logger(), "No gates received.");
+    status_msg += "no-gates ";
   }
+  
+  if (pos1_r_) {
+    publish_pos1();
+    RCLCPP_INFO(this->get_logger(), "Position 1: x=%.2f, y=%.2f, yaw=%.2f",
+                pos1[0], pos1[1], pos1[2]);
+    status_msg += "pos1 ";
+    success = true;
+  } else {
+    RCLCPP_WARN(this->get_logger(), "Position 1 not received.");
+    status_msg += "no-pos1 ";
+  }
+  
+  if (pos2_r_) {
+    publish_pos2();
+    RCLCPP_INFO(this->get_logger(), "Position 2: x=%.2f, y=%.2f, yaw=%.2f",
+                pos2[0], pos2[1], pos2[2]);
+    status_msg += "pos2 ";
+    success = true;
+  } else {
+    RCLCPP_WARN(this->get_logger(), "Position 2 not received.");
+    status_msg += "no-pos2 ";
+  }
+  
+  response->success = success;
+  response->message = status_msg;
 }
 
-//  ==== get methods ==== 
-pose_t ReMapping::get_pose1()
-{
-  return pos1;
-}
 
-pose_t ReMapping::get_pose2()
-{
-  return pos2;
-}
-
-
-// ==== set methods ====
+// ==== Set methods ====
 void ReMapping::set_obstacles(const obstacles_msgs::msg::ObstacleArrayMsg &msg)
 {
   const std::string frame_id = this->get_parameter("marker_frame").as_string();
@@ -278,14 +311,13 @@ void ReMapping::set_borders(const geometry_msgs::msg::Polygon &msg)
       q.x = cx + dx * k;
       q.y = cy + dy * k;
     } else {
-      // se coincide col baricentro, lascia il punto lì
       q.x = cx; q.y = cy;
     }
     q.z = 0.0;
     pts_out.push_back(q);
   }
-  // chiudi poligono
-  pts_out.push_back(pts_out.front());
+  
+  pts_out.push_back(pts_out.front());// chiudi poligono
 
   // Marker contorno (LINE_STRIP)
   visualization_msgs::msg::Marker border;
@@ -309,26 +341,129 @@ void ReMapping::set_borders(const geometry_msgs::msg::Polygon &msg)
   have_borders_ = !last_marker_array_borders_.markers.empty();
   RCLCPP_INFO(this->get_logger(), "Arena cached: %zu markers",
               last_marker_array_borders_.markers.size());
-
 }
 
 void ReMapping::set_gates(const geometry_msgs::msg::PoseArray &msg)
 {
   // Handle the gates
   RCLCPP_INFO(this->get_logger(), "Setting gates");
-  // TO DO: Implement logic to handle gates
+  
+  for (const auto &pose : msg.poses)
+  {
+    std::vector<double> gate;
+    gate.push_back(pose.position.x);
+    gate.push_back(pose.position.y);
+    tf2::Quaternion q(pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w);
+    double r, p, y;
+    tf2::Matrix3x3 m(q);
+    m.getRPY(r, p, y);
+    gate.push_back(y);
+    gates.push_back(gate);
+  }
 }
 
 void ReMapping::set_pos1(const geometry_msgs::msg::PoseWithCovarianceStamped& msg)
 {
   RCLCPP_INFO(this->get_logger(), "Setting pos1");
+
+  pos1.push_back(msg.pose.pose.position.x);
+  pos1.push_back(msg.pose.pose.position.y);
+  tf2::Quaternion q(msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w);
+  double r, p, y;
+  tf2::Matrix3x3 m(q);
+  m.getRPY(r, p, y);
+  pos1.push_back(y);
 }
 
 void ReMapping::set_pos2(const geometry_msgs::msg::PoseWithCovarianceStamped& msg)
 {
   RCLCPP_INFO(this->get_logger(), "Setting pos2");
+
+  pos2.push_back(msg.pose.pose.position.x);
+  pos2.push_back(msg.pose.pose.position.y);
+  tf2::Quaternion q(msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w);
+  double r, p, y;
+  tf2::Matrix3x3 m(q);
+  m.getRPY(r, p, y);
+  pos2.push_back(y);
 }
 
+
+// ==== Publish methods ====
+void ReMapping::publish_gates()
+{
+  geometry_msgs::msg::PoseArray gates_msg;
+  gates_msg.header.stamp = this->now();
+  gates_msg.header.frame_id = get_marker_frame();
+  
+  for (const auto &gate : gates) {
+    geometry_msgs::msg::Pose pose;
+    pose.position.x = gate[0];
+    pose.position.y = gate[1];
+    pose.position.z = 0.0;
+    
+    // Convert yaw to quaternion
+    tf2::Quaternion q;
+    q.setRPY(0, 0, gate[2]);
+    pose.orientation.x = q.x();
+    pose.orientation.y = q.y();
+    pose.orientation.z = q.z();
+    pose.orientation.w = q.w();
+    
+    gates_msg.poses.push_back(pose);
+  }
+  
+  pub_gates_->publish(gates_msg);
+}
+
+void ReMapping::publish_pos1()
+{
+  if (pos1.size() >= 3) {
+    geometry_msgs::msg::PoseWithCovarianceStamped pos1_msg;
+    pos1_msg.header.stamp = this->now();
+    pos1_msg.header.frame_id = get_marker_frame();
+    
+    pos1_msg.pose.pose.position.x = pos1[0];
+    pos1_msg.pose.pose.position.y = pos1[1];
+    pos1_msg.pose.pose.position.z = 0.0;
+    
+    // Convert yaw to quaternion
+    tf2::Quaternion q;
+    q.setRPY(0, 0, pos1[2]);
+    pos1_msg.pose.pose.orientation.x = q.x();
+    pos1_msg.pose.pose.orientation.y = q.y();
+    pos1_msg.pose.pose.orientation.z = q.z();
+    pos1_msg.pose.pose.orientation.w = q.w();
+    
+    pub_pos1_->publish(pos1_msg);
+  }
+}
+
+void ReMapping::publish_pos2()
+{
+  if (pos2.size() >= 3) {
+    geometry_msgs::msg::PoseWithCovarianceStamped pos2_msg;
+    pos2_msg.header.stamp = this->now();
+    pos2_msg.header.frame_id = get_marker_frame();
+    
+    pos2_msg.pose.pose.position.x = pos2[0];
+    pos2_msg.pose.pose.position.y = pos2[1];
+    pos2_msg.pose.pose.position.z = 0.0;
+    
+    // Convert yaw to quaternion
+    tf2::Quaternion q;
+    q.setRPY(0, 0, pos2[2]);
+    pos2_msg.pose.pose.orientation.x = q.x();
+    pos2_msg.pose.pose.orientation.y = q.y();
+    pos2_msg.pose.pose.orientation.z = q.z();
+    pos2_msg.pose.pose.orientation.w = q.w();
+    
+    pub_pos2_->publish(pos2_msg);
+  }
+}
+
+
+// ==== Main function ====
 int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);

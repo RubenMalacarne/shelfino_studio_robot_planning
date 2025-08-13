@@ -37,7 +37,7 @@ public:
     bool have_obstacles_ = false;
     bool have_borders_ = false;
 
-    //cuscino
+    //cuscino per ostacoli e arena
     double get_shelfino_inflation() const {
         return this->get_parameter("shelfino_inflation").as_double();
     }
@@ -46,8 +46,21 @@ public:
         return this->get_parameter("marker_frame").as_string();
     }
 
-      
 
+    // Set
+    void set_pos1(const geometry_msgs::msg::PoseWithCovarianceStamped& msg);
+    void set_pos2(const geometry_msgs::msg::PoseWithCovarianceStamped& msg);
+    void set_obstacles(const obstacles_msgs::msg::ObstacleArrayMsg &msg);
+    void set_borders(const geometry_msgs::msg::Polygon &msg);
+    void set_gates(const geometry_msgs::msg::PoseArray &msg);
+    
+    // Map values
+    std::vector<pose_t> gates;
+    
+    // Position storage
+    pose_t pos1;
+    pose_t pos2;
+      
 private:
   // Subscribers
   rclcpp::Subscription<geometry_msgs::msg::Polygon>::SharedPtr subscription_borders;
@@ -64,10 +77,10 @@ private:
   // Publishers 
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_markers_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_arena_;  
-  // Position storage
-  pose_t pos1;
-  pose_t pos2;
-
+  rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr pub_gates_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr pub_pos1_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr pub_pos2_;
+  
   // Callbacks
   void callback_borders(const geometry_msgs::msg::Polygon::SharedPtr msg);
   void callback_obstacles(const obstacles_msgs::msg::ObstacleArrayMsg::SharedPtr msg);
@@ -79,19 +92,12 @@ private:
   void on_trigger(
     const std::shared_ptr<std_srvs::srv::Trigger::Request>,
     std::shared_ptr<std_srvs::srv::Trigger::Response> res); 
-  // Get
-  pose_t get_pose1();
-  pose_t get_pose2();
-
-  // Set
-  void set_pos1(const geometry_msgs::msg::PoseWithCovarianceStamped& msg);
-  void set_pos2(const geometry_msgs::msg::PoseWithCovarianceStamped& msg);
-  void set_obstacles(const obstacles_msgs::msg::ObstacleArrayMsg &msg);
-  void set_borders(const geometry_msgs::msg::Polygon &msg);
-  void set_gates(const geometry_msgs::msg::PoseArray &msg);
-  // Map values
-  std::vector<pose_t> gates;
   
+  // Gates publisher method
+  void publish_gates();
+  void publish_pos1();
+  void publish_pos2();
+
   bool is_map_created = false;
 
 };

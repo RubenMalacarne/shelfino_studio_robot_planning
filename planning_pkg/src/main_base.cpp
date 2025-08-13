@@ -10,6 +10,8 @@
 
 #include "planning_pkg/common.hpp"
 
+//simple exemple to send a path for shelfino1 to NAV2
+
 using namespace std::chrono_literals;
 class PathGenerator : public rclcpp::Node
 {
