@@ -71,12 +71,14 @@ private:
 
   // Service
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr srv_trigger;
-  visualization_msgs::msg::MarkerArray last_marker_array_; 
-  visualization_msgs::msg::MarkerArray last_marker_array_borders_; 
+  obstacles_msgs::msg::ObstacleArrayMsg last_inflated_obstacles_; 
+  geometry_msgs::msg::Polygon last_inflated_borders_; 
 
   // Publishers 
-  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_markers_;
-  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_arena_;  
+  rclcpp::Publisher<obstacles_msgs::msg::ObstacleArrayMsg>::SharedPtr pub_obstacles_inflated;
+  rclcpp::Publisher<geometry_msgs::msg::Polygon>::SharedPtr pub_arena_inflated;
+  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_viz_obstacles_;
+  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_viz_arena_;
   rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr pub_gates_;
   rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr pub_pos1_;
   rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr pub_pos2_;
@@ -97,7 +99,13 @@ private:
   void publish_gates();
   void publish_pos1();
   void publish_pos2();
+  void create_obstacles_markers();
+  void create_arena_markers();
 
   bool is_map_created = false;
+  obstacles_msgs::msg::ObstacleArrayMsg inflated_obstacles;
+  geometry_msgs::msg::Polygon inflated_borders;
+  visualization_msgs::msg::MarkerArray viz_obstacles_markers_;
+  visualization_msgs::msg::MarkerArray viz_arena_markers_;
 
 };

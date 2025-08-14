@@ -26,8 +26,10 @@ ReMapping::ReMapping() : Node("ReMapping")
       "/shelfino3/amcl_pose", qos, std::bind(&ReMapping::callback_pos2, this, std::placeholders::_1));
   
   // Publishers
-  pub_markers_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/inflated_obstacles", qos);
-  pub_arena_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/arena_markers", qos);
+  pub_obstacles_inflated = this->create_publisher<obstacles_msgs::msg::ObstacleArrayMsg>("/inflated_obstacles", qos);
+  pub_arena_inflated = this->create_publisher<geometry_msgs::msg::Polygon>("/inflated_arena", qos);
+  pub_viz_obstacles_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/inflated_obstacles_viz", qos);
+  pub_viz_arena_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/inflated_arena_viz", qos);
   pub_gates_ = this->create_publisher<geometry_msgs::msg::PoseArray>("/published_gates", qos);
   pub_pos1_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("/published_pos1", qos);
   pub_pos2_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("/published_pos2", qos);
@@ -114,15 +116,17 @@ void ReMapping::on_trigger(const std::shared_ptr<std_srvs::srv::Trigger::Request
   bool success = false;
   
   if (have_obstacles_) {
-    pub_markers_->publish(last_marker_array_);
-    RCLCPP_INFO(this->get_logger(), "Published inflated obstacles to RViz2.");
+    pub_obstacles_inflated->publish(last_inflated_obstacles_);
+    pub_viz_obstacles_->publish(viz_obstacles_markers_);
+    RCLCPP_INFO(this->get_logger(), "Published inflated obstacles.");
     status_msg += "obstacles ";
     success = true;
   }
   
   if (have_borders_) {
-    pub_arena_->publish(last_marker_array_borders_);
-    RCLCPP_INFO(this->get_logger(), "Published inflated arena to RViz2.");
+    pub_arena_inflated->publish(last_inflated_borders_);
+    pub_viz_arena_->publish(viz_arena_markers_);
+    RCLCPP_INFO(this->get_logger(), "Published inflated arena.");
     status_msg += "arena ";
     success = true;
   }
@@ -177,109 +181,57 @@ void ReMapping::on_trigger(const std::shared_ptr<std_srvs::srv::Trigger::Request
 // ==== Set methods ====
 void ReMapping::set_obstacles(const obstacles_msgs::msg::ObstacleArrayMsg &msg)
 {
-  const std::string frame_id = this->get_parameter("marker_frame").as_string();
-  rclcpp::Time now = this->now();
-
-  visualization_msgs::msg::MarkerArray array;
-  int id = 0;
-
-  auto make_line_strip = [&](const std::vector<geometry_msgs::msg::Point> &pts, int id_local) {
-    visualization_msgs::msg::Marker m;
-    m.header.frame_id = frame_id;
-    m.header.stamp = now;
-    m.ns = "inflated_polygons";
-    m.id = id_local;
-    m.type = visualization_msgs::msg::Marker::LINE_STRIP;
-    m.action = visualization_msgs::msg::Marker::ADD;
-    m.pose.orientation.w = 1.0;
-    m.scale.x = 0.03;
-    m.color.r = 1.0f; m.color.g = 0.6f; m.color.b = 0.0f; m.color.a = 1.0f;
-    m.lifetime = rclcpp::Duration(0, 0);
-    m.points = pts;
-    return m;
-  };
-
-  auto make_cylinder = [&](double x, double y, double r, int id_local) {
-    visualization_msgs::msg::Marker m;
-    m.header.frame_id = frame_id;
-    m.header.stamp = now;
-    m.ns = "inflated_circles";
-    m.id = id_local;
-    m.type = visualization_msgs::msg::Marker::CYLINDER;
-    m.action = visualization_msgs::msg::Marker::ADD;
-    m.pose.orientation.w = 1.0;
-    m.pose.position.x = x;
-    m.pose.position.y = y;
-    m.pose.position.z = 0.0;
-    m.scale.x = 2.0 * r;
-    m.scale.y = 2.0 * r;
-    m.scale.z = 0.02;
-    m.color.r = 0.1f; m.color.g = 0.7f; m.color.b = 1.0f; m.color.a = 0.6f;
-    m.lifetime = rclcpp::Duration(0, 0);
-    return m;
-  };
+  inflated_obstacles.header = msg.header;
 
   for (const auto &obstacle : msg.obstacles) {
+    obstacles_msgs::msg::ObstacleMsg inflated_obstacle;
+    
     if (obstacle.radius == 0.0) {
       RCLCPP_INFO(this->get_logger(), "is a polygon!");
+      
+      inflated_obstacle.radius = 0.0;
       const auto n = obstacle.polygon.points.size();
       if (n < 2) continue;
       
-      // Create a copy of points to modify
-      auto inflated_points = obstacle.polygon.points;
-      
+      // Calculate centroid
       double cx = 0.0, cy = 0.0;
-      for (const auto &p : inflated_points) { cx += p.x; cy += p.y; }
+      for (const auto &p : obstacle.polygon.points) { 
+        cx += p.x; 
+        cy += p.y; 
+      }
       cx /= static_cast<double>(n);
       cy /= static_cast<double>(n);
       
-      for (auto &p : inflated_points){
-        //pitagora per calcolare la distanza dal centro
+      // Inflate polygon points
+      for (const auto &p : obstacle.polygon.points) {
+        geometry_msgs::msg::Point32 inflated_point;
         double dx = p.x - cx, dy = p.y - cy;
         double len = std::sqrt(dx*dx + dy*dy);
         if (len > 1e-6) {
           double s = (len + inflation_value) / len; 
-          p.x = cx + dx * s;
-          p.y = cy + dy * s;
+          inflated_point.x = cx + dx * s;
+          inflated_point.y = cy + dy * s;
         } else {
-          p.x = cx + inflation_value;
-          p.y = cy;
+          inflated_point.x = cx + inflation_value;
+          inflated_point.y = cy;
         }
+        inflated_point.z = p.z;
+        inflated_obstacle.polygon.points.push_back(inflated_point);
       }
-      
-      std::vector<geometry_msgs::msg::Point> pts;
-      pts.reserve(n + 1);
-      for (const auto &p : inflated_points) {
-        geometry_msgs::msg::Point pt; 
-        pt.x = p.x; pt.y = p.y; pt.z = 0.0; 
-        pts.push_back(pt);
-      }
-      geometry_msgs::msg::Point first; 
-      first.x = inflated_points.front().x;
-      first.y = inflated_points.front().y; 
-      first.z = 0.0; 
-      pts.push_back(first);
-
-      array.markers.push_back(make_line_strip(pts, id++));
     }
     else {
       RCLCPP_INFO(this->get_logger(), "is a circle");
-      const double new_r = obstacle.radius + inflation_value;
-      double cx, cy;
-      if (!obstacle.polygon.points.empty()) {
-        cx = obstacle.polygon.points[0].x;
-        cy = obstacle.polygon.points[0].y;
-      } else {
-        cx = 0.0; cy = 0.0;
-      }
-
-      array.markers.push_back(make_cylinder(cx, cy, new_r, id++));
+      inflated_obstacle.radius = obstacle.radius + inflation_value;
+      inflated_obstacle.polygon = obstacle.polygon;
     }
+    
+    inflated_obstacles.obstacles.push_back(inflated_obstacle);
   }
-  // pub_markers_->publish(array);
-  last_marker_array_ = array;
-  have_obstacles_ = !last_marker_array_.markers.empty();
-  RCLCPP_INFO(this->get_logger(), "Inflated obstacles cached: %zu markers", last_marker_array_.markers.size());
+  
+  last_inflated_obstacles_ = inflated_obstacles;
+  have_obstacles_ = !last_inflated_obstacles_.obstacles.empty();
+  create_obstacles_markers();
+  RCLCPP_INFO(this->get_logger(), "Inflated obstacles cached: %zu obstacles", last_inflated_obstacles_.obstacles.size());
 }
 
 void ReMapping::set_borders(const geometry_msgs::msg::Polygon &msg)
@@ -287,9 +239,8 @@ void ReMapping::set_borders(const geometry_msgs::msg::Polygon &msg)
   // Handle the borders of the arena
   RCLCPP_INFO(this->get_logger(), "Setting borders");
   
-  const std::string frame_id = this->get_parameter("marker_frame").as_string();
-  rclcpp::Time now = this->now();
-
+  
+  
   //compute centroid
   const auto &pts_in = msg.points;
   const size_t n = pts_in.size();
@@ -299,48 +250,28 @@ void ReMapping::set_borders(const geometry_msgs::msg::Polygon &msg)
   cx /= static_cast<double>(n);
   cy /= static_cast<double>(n);
 
-  std::vector<geometry_msgs::msg::Point> pts_out; pts_out.reserve(n + 1);
   const double eps = 1e-6;
   for (const auto &p : pts_in) {
+    geometry_msgs::msg::Point32 inflated_point;
     double dx = p.x - cx, dy = p.y - cy;
     double len = std::sqrt(dx*dx + dy*dy);
-    geometry_msgs::msg::Point q;
     if (len > eps) {
-      // scala verso il centro: (len - inflation_value)/len, clamp a > 0
+      // Scale towards center: (len - inflation_value)/len, clamp to > 0
       double k = std::max((len - inflation_value) / len, 0.0);
-      q.x = cx + dx * k;
-      q.y = cy + dy * k;
+      inflated_point.x = cx + dx * k;
+      inflated_point.y = cy + dy * k;
     } else {
-      q.x = cx; q.y = cy;
+      inflated_point.x = cx; 
+      inflated_point.y = cy;
     }
-    q.z = 0.0;
-    pts_out.push_back(q);
+    inflated_point.z = p.z;
+    inflated_borders.points.push_back(inflated_point);
   }
-  
-  pts_out.push_back(pts_out.front());// chiudi poligono
 
-  // Marker contorno (LINE_STRIP)
-  visualization_msgs::msg::Marker border;
-  border.header.frame_id = frame_id;
-  border.header.stamp = now;
-  border.ns = "arena_inflated";
-  border.id = 0;
-  border.type = visualization_msgs::msg::Marker::LINE_STRIP;
-  border.action = visualization_msgs::msg::Marker::ADD;
-  border.pose.orientation.w = 1.0;
-  border.scale.x = 0.05; // spessore linea
-  border.color.r = 0.0f; border.color.g = 1.0f; border.color.b = 0.3f; border.color.a = 1.0f;
-  border.lifetime = rclcpp::Duration(0, 0);
-  border.points = pts_out;
-
-  visualization_msgs::msg::MarkerArray arr;
-  arr.markers.push_back(border);
-  // pub_arena_->publish(arr);
-
-  last_marker_array_borders_ = arr;
-  have_borders_ = !last_marker_array_borders_.markers.empty();
-  RCLCPP_INFO(this->get_logger(), "Arena cached: %zu markers",
-              last_marker_array_borders_.markers.size());
+  last_inflated_borders_ = inflated_borders;
+  have_borders_ = !last_inflated_borders_.points.empty();
+  create_arena_markers();
+  RCLCPP_INFO(this->get_logger(), "Arena cached: %zu points", last_inflated_borders_.points.size());
 }
 
 void ReMapping::set_gates(const geometry_msgs::msg::PoseArray &msg)
@@ -462,6 +393,101 @@ void ReMapping::publish_pos2()
   }
 }
 
+
+// ==== Marker creation methods ====
+void ReMapping::create_obstacles_markers()
+{
+  const std::string frame_id = this->get_parameter("marker_frame").as_string();
+  rclcpp::Time now = this->now();
+
+  viz_obstacles_markers_.markers.clear();
+  int id = 0;
+
+  for (const auto &obstacle : last_inflated_obstacles_.obstacles) {
+    visualization_msgs::msg::Marker marker;
+    marker.header.frame_id = frame_id;
+    marker.header.stamp = now;
+    marker.ns = "inflated_obstacles";
+    marker.id = id++;
+    marker.action = visualization_msgs::msg::Marker::ADD;
+    marker.pose.orientation.w = 1.0;
+    marker.color.r = 1.0f; marker.color.g = 0.6f; marker.color.b = 0.0f; marker.color.a = 1.0f;
+    marker.lifetime = rclcpp::Duration(0, 0);
+
+    if (obstacle.radius == 0.0) {
+      // Polygon obstacle - use LINE_STRIP
+      marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
+      marker.scale.x = 0.03;
+      
+      for (const auto &p : obstacle.polygon.points) {
+        geometry_msgs::msg::Point pt;
+        pt.x = p.x; pt.y = p.y; pt.z = 0.0;
+        marker.points.push_back(pt);
+      }
+      
+      // Close the polygon
+      if (!obstacle.polygon.points.empty()) {
+        geometry_msgs::msg::Point first;
+        first.x = obstacle.polygon.points.front().x;
+        first.y = obstacle.polygon.points.front().y;
+        first.z = 0.0;
+        marker.points.push_back(first);
+      }
+    }
+    else {
+      // Circular obstacle - use CYLINDER
+      marker.type = visualization_msgs::msg::Marker::CYLINDER;
+      if (!obstacle.polygon.points.empty()) {
+        marker.pose.position.x = obstacle.polygon.points[0].x;
+        marker.pose.position.y = obstacle.polygon.points[0].y;
+        marker.pose.position.z = 0.0;
+      }
+      marker.scale.x = 2.0 * obstacle.radius;
+      marker.scale.y = 2.0 * obstacle.radius;
+      marker.scale.z = 0.02;
+      
+    }
+    
+    viz_obstacles_markers_.markers.push_back(marker);
+  }
+}
+
+void ReMapping::create_arena_markers()
+{
+  const std::string frame_id = this->get_parameter("marker_frame").as_string();
+  rclcpp::Time now = this->now();
+
+  viz_arena_markers_.markers.clear();
+  
+  visualization_msgs::msg::Marker marker;
+  marker.header.frame_id = frame_id;
+  marker.header.stamp = now;
+  marker.ns = "inflated_arena";
+  marker.id = 0;
+  marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
+  marker.action = visualization_msgs::msg::Marker::ADD;
+  marker.pose.orientation.w = 1.0;
+  marker.scale.x = 0.05;
+  marker.color.r = 1.0f; marker.color.g = 0.6f; marker.color.b = 0.0f; marker.color.a = 1.0f;
+  marker.lifetime = rclcpp::Duration(0, 0);
+  
+  for (const auto &p : last_inflated_borders_.points) {
+    geometry_msgs::msg::Point pt;
+    pt.x = p.x; pt.y = p.y; pt.z = 0.0;
+    marker.points.push_back(pt);
+  }
+  
+  // Close the polygon
+  if (!last_inflated_borders_.points.empty()) {
+    geometry_msgs::msg::Point first;
+    first.x = last_inflated_borders_.points.front().x;
+    first.y = last_inflated_borders_.points.front().y;
+    first.z = 0.0;
+    marker.points.push_back(first);
+  }
+  
+  viz_arena_markers_.markers.push_back(marker);
+}
 
 // ==== Main function ====
 int main(int argc, char ** argv)

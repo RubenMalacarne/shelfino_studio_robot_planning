@@ -15,6 +15,8 @@
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav_msgs/msg/path.hpp"
 
+#include <obstacles_msgs/msg/obstacle_array_msg.hpp>
+
 #include "tf2/LinearMath/Quaternion.h"
 #include "tf2/LinearMath/Matrix3x3.h"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
@@ -38,9 +40,9 @@ public:
         const auto qos = rclcpp::QoS(rclcpp::KeepLast(1), planning_pkg::qos::qos_profile_custom1);
 
         // Subscriber
-        sub_obstacles_ = this->create_subscription<visualization_msgs::msg::MarkerArray>("/inflated_obstacles", qos,
+        sub_obstacles_ = this->create_subscription<obstacles_msgs::msg::ObstacleArrayMsg>("/inflated_obstacles", qos,
                                                                                          std::bind(&PathPlanningOrchestratorClient::cb_obstacles_, this, std::placeholders::_1));
-        sub_arena_ = this->create_subscription<visualization_msgs::msg::MarkerArray>("/arena_markers", qos,
+        sub_arena_ = this->create_subscription<geometry_msgs::msg::Polygon>("/inflated_arena", qos,
                                                                                      std::bind(&PathPlanningOrchestratorClient::cb_arena_, this, std::placeholders::_1));
         sub_gates_ = this->create_subscription<geometry_msgs::msg::PoseArray>("/published_gates", qos,
                                                                               std::bind(&PathPlanningOrchestratorClient::cb_gates_, this, std::placeholders::_1));
@@ -117,21 +119,21 @@ private:
 
     // ===== Callbacks =====
 
-    void cb_obstacles_(const visualization_msgs::msg::MarkerArray::SharedPtr msg)
+    void cb_obstacles_(const obstacles_msgs::msg::ObstacleArrayMsg::SharedPtr msg)
     {
         last_obstacles_ = *msg;
         got_obstacles_ = true;
-        RCLCPP_INFO(this->get_logger(), "Recived obstacles inflated: %zu markers",
-                    last_obstacles_.markers.size());
+        RCLCPP_INFO(this->get_logger(), "Received obstacles inflated: %zu obstacles",
+                    last_obstacles_.obstacles.size());
         path_planning();
     }
 
-    void cb_arena_(const visualization_msgs::msg::MarkerArray::SharedPtr msg)
+    void cb_arena_(const geometry_msgs::msg::Polygon::SharedPtr msg)
     {
         last_arena_ = *msg;
         got_arena_ = true;
-        RCLCPP_INFO(this->get_logger(), "Recived arena inflated: %zu markers",
-                    last_arena_.markers.size());
+        RCLCPP_INFO(this->get_logger(), "Received arena inflated: %zu points",
+                    last_arena_.points.size());
         path_planning();
     }
 
@@ -268,8 +270,8 @@ private:
     rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr client_re_mapping_trigger;
     rclcpp::TimerBase::SharedPtr init_timer_;
 
-    rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr sub_obstacles_;
-    rclcpp::Subscription<visualization_msgs::msg::MarkerArray>::SharedPtr sub_arena_;
+    rclcpp::Subscription<obstacles_msgs::msg::ObstacleArrayMsg>::SharedPtr sub_obstacles_;
+    rclcpp::Subscription<geometry_msgs::msg::Polygon>::SharedPtr sub_arena_;
     rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr sub_gates_;
     rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr sub_pos1_;
     rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr sub_pos2_;
@@ -277,8 +279,8 @@ private:
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pub_path_pos1_;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pub_path_pos2_;
 
-    visualization_msgs::msg::MarkerArray last_obstacles_;
-    visualization_msgs::msg::MarkerArray last_arena_;
+    obstacles_msgs::msg::ObstacleArrayMsg last_obstacles_;
+    geometry_msgs::msg::Polygon last_arena_;
     geometry_msgs::msg::PoseArray last_gates_;
     geometry_msgs::msg::PoseWithCovarianceStamped last_pos1_;
     geometry_msgs::msg::PoseWithCovarianceStamped last_pos2_;
