@@ -11,6 +11,7 @@
 #include <tf2/LinearMath/Matrix3x3.h>
 
 #include <std_srvs/srv/trigger.hpp>
+#include <vector>
 
 // Type definitions
 using pose_t = std::vector<double>;
@@ -48,15 +49,14 @@ public:
 
 
     // Set
-    void set_pos1(const geometry_msgs::msg::PoseWithCovarianceStamped& msg);
-    void set_pos2(const geometry_msgs::msg::PoseWithCovarianceStamped& msg);
+    void set_pos(pose_t& pos, const geometry_msgs::msg::PoseWithCovarianceStamped& msg);
     void set_obstacles(const obstacles_msgs::msg::ObstacleArrayMsg &msg);
     void set_borders(const geometry_msgs::msg::Polygon &msg);
     void set_gates(const geometry_msgs::msg::PoseArray &msg);
     
     // Map values
     std::vector<pose_t> gates;
-    
+    double distance_ahead = 0.5;
     // Position storage
     pose_t pos1;
     pose_t pos2;
@@ -97,8 +97,7 @@ private:
   
   // Gates publisher method
   void publish_gates();
-  void publish_pos1();
-  void publish_pos2();
+  void publish_pos(pose_t pos);
   void create_obstacles_markers();
   void create_arena_markers();
 

@@ -6,12 +6,11 @@
 
 ReMapping::ReMapping() : Node("ReMapping")
 {
-  
   const auto qos = rclcpp::QoS(rclcpp::KeepLast(1), planning_pkg::qos::qos_profile_custom1);
 
   this->declare_parameter("shelfino_inflation", 0.5);
   this->declare_parameter("marker_frame", "map");
-  inflation_value = get_shelfino_inflation();
+  inflation_value = this->get_parameter("shelfino_inflation").as_double();
 
   // Subscribers
   subscription_borders = this->create_subscription<geometry_msgs::msg::Polygon>(
@@ -86,10 +85,10 @@ void ReMapping::callback_gates(const geometry_msgs::msg::PoseArray::SharedPtr ms
 void ReMapping::callback_pos1(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg)
 {
   if (msg->pose.pose.position.x != 0.0 || msg->pose.pose.position.y != 0.0) {
-    RCLCPP_INFO(this->get_logger(), "Received pos2");
+    RCLCPP_INFO(this->get_logger(), "Received pos1");
     subscription_position1.reset();
     //function to handle position 1
-    this->set_pos1(*msg);
+    this->set_pos(pos1, *msg);
     pos1_r_ = true;
   } else {
     RCLCPP_WARN(this->get_logger(), "Received an invalid position for pos1");
@@ -101,7 +100,7 @@ void ReMapping::callback_pos2(const geometry_msgs::msg::PoseWithCovarianceStampe
   if( msg->pose.pose.position.x != 0.0 || msg->pose.pose.position.y != 0.0) {
     RCLCPP_INFO(this->get_logger(), "Received pos2");
     subscription_position2.reset();
-    this->set_pos2(*msg);
+    this->set_pos(pos2, *msg);
     //function to handle position 2
     pos2_r_ = true;
   } else {
@@ -152,7 +151,7 @@ void ReMapping::on_trigger(const std::shared_ptr<std_srvs::srv::Trigger::Request
   }
   
   if (pos1_r_) {
-    publish_pos1();
+    publish_pos(pos1);
     RCLCPP_INFO(this->get_logger(), "Position 1: x=%.2f, y=%.2f, yaw=%.2f",
                 pos1[0], pos1[1], pos1[2]);
     status_msg += "pos1 ";
@@ -163,7 +162,7 @@ void ReMapping::on_trigger(const std::shared_ptr<std_srvs::srv::Trigger::Request
   }
   
   if (pos2_r_) {
-    publish_pos2();
+    publish_pos(pos2);
     RCLCPP_INFO(this->get_logger(), "Position 2: x=%.2f, y=%.2f, yaw=%.2f",
                 pos2[0], pos2[1], pos2[2]);
     status_msg += "pos2 ";
@@ -293,30 +292,19 @@ void ReMapping::set_gates(const geometry_msgs::msg::PoseArray &msg)
   }
 }
 
-void ReMapping::set_pos1(const geometry_msgs::msg::PoseWithCovarianceStamped& msg)
+void ReMapping::set_pos(pose_t& pos, const geometry_msgs::msg::PoseWithCovarianceStamped& msg)
 {
-  RCLCPP_INFO(this->get_logger(), "Setting pos1");
+  RCLCPP_INFO(this->get_logger(), "Setting position");
 
-  pos1.push_back(msg.pose.pose.position.x);
-  pos1.push_back(msg.pose.pose.position.y);
-  tf2::Quaternion q(msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w);
+  pos.clear(); // Clear previous data
+  pos.push_back(msg.pose.pose.position.x);
+  pos.push_back(msg.pose.pose.position.y);
+  tf2::Quaternion q(msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, 
+                    msg.pose.pose.orientation.z, msg.pose.pose.orientation.w);
   double r, p, y;
   tf2::Matrix3x3 m(q);
   m.getRPY(r, p, y);
-  pos1.push_back(y);
-}
-
-void ReMapping::set_pos2(const geometry_msgs::msg::PoseWithCovarianceStamped& msg)
-{
-  RCLCPP_INFO(this->get_logger(), "Setting pos2");
-
-  pos2.push_back(msg.pose.pose.position.x);
-  pos2.push_back(msg.pose.pose.position.y);
-  tf2::Quaternion q(msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w);
-  double r, p, y;
-  tf2::Matrix3x3 m(q);
-  m.getRPY(r, p, y);
-  pos2.push_back(y);
+  pos.push_back(y);
 }
 
 
@@ -347,52 +335,31 @@ void ReMapping::publish_gates()
   pub_gates_->publish(gates_msg);
 }
 
-void ReMapping::publish_pos1()
-{
-  if (pos1.size() >= 3) {
-    geometry_msgs::msg::PoseWithCovarianceStamped pos1_msg;
-    pos1_msg.header.stamp = this->now();
-    pos1_msg.header.frame_id = get_marker_frame();
-    
-    pos1_msg.pose.pose.position.x = pos1[0];
-    pos1_msg.pose.pose.position.y = pos1[1];
-    pos1_msg.pose.pose.position.z = 0.0;
-    
-    // Convert yaw to quaternion
-    tf2::Quaternion q;
-    q.setRPY(0, 0, pos1[2]);
-    pos1_msg.pose.pose.orientation.x = q.x();
-    pos1_msg.pose.pose.orientation.y = q.y();
-    pos1_msg.pose.pose.orientation.z = q.z();
-    pos1_msg.pose.pose.orientation.w = q.w();
-    
-    pub_pos1_->publish(pos1_msg);
-  }
-}
-
-void ReMapping::publish_pos2()
-{
-  if (pos2.size() >= 3) {
-    geometry_msgs::msg::PoseWithCovarianceStamped pos2_msg;
-    pos2_msg.header.stamp = this->now();
-    pos2_msg.header.frame_id = get_marker_frame();
-    
-    pos2_msg.pose.pose.position.x = pos2[0];
-    pos2_msg.pose.pose.position.y = pos2[1];
-    pos2_msg.pose.pose.position.z = 0.0;
+void ReMapping::publish_pos(pose_t pos){
+  if (pos.size() >= 3) {
+    geometry_msgs::msg::PoseWithCovarianceStamped pos_msg;
+    pos_msg.header.stamp = this->now();
+    pos_msg.header.frame_id = this->get_parameter("marker_frame").as_string();    
+    double yaw = pos[2];
+    pos_msg.pose.pose.position.x = pos[0] + distance_ahead * std::cos(yaw);
+    pos_msg.pose.pose.position.y = pos[1] + distance_ahead * std::sin(yaw);
+    pos_msg.pose.pose.position.z = 0.0;
     
     // Convert yaw to quaternion
     tf2::Quaternion q;
-    q.setRPY(0, 0, pos2[2]);
-    pos2_msg.pose.pose.orientation.x = q.x();
-    pos2_msg.pose.pose.orientation.y = q.y();
-    pos2_msg.pose.pose.orientation.z = q.z();
-    pos2_msg.pose.pose.orientation.w = q.w();
-    
-    pub_pos2_->publish(pos2_msg);
+    q.setRPY(0, 0, yaw);
+    pos_msg.pose.pose.orientation.x = q.x();
+    pos_msg.pose.pose.orientation.y = q.y();
+    pos_msg.pose.pose.orientation.z = q.z();
+    pos_msg.pose.pose.orientation.w = q.w();
+    //chack if pos1 o pos2
+    if (pos == pos1) {
+      pub_pos1_->publish(pos_msg); 
+    } else if(pos == pos2) {
+      pub_pos2_->publish(pos_msg); 
+    }
   }
 }
-
 
 // ==== Marker creation methods ====
 void ReMapping::create_obstacles_markers()
