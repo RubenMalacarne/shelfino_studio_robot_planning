@@ -22,7 +22,7 @@ public:
   {
     // Action clients 
     client1_ptr_ = rclcpp_action::create_client<FollowPath>(this, "/shelfino1/follow_path");
-    client2_ptr_ = rclcpp_action::create_client<FollowPath>(this, "/shelfino2/follow_path");
+    client2_ptr_ = rclcpp_action::create_client<FollowPath>(this, "/shelfino3/follow_path");
 
    
     auto qos = rclcpp::QoS(rclcpp::KeepLast(1));
@@ -33,7 +33,7 @@ public:
     });
 
     _path_subscription2 = this->create_subscription<nav_msgs::msg::Path>(
-    "/path_pos2_to_gates", qos,
+    "/path_2_smoothed", qos,
     [this, client = client2_ptr_](nav_msgs::msg::Path::ConstSharedPtr msg) {
       this->store_path(*msg, client, "shelfino2");
     });
