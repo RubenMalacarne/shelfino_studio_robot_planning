@@ -26,3 +26,6 @@ services:
       - /dev/input/js0:/dev/input/js0  
     privileged: true
     command: bash
+
+
+# colcon build --symlink-install --parallel-workers 1 && source install/setup.bash 

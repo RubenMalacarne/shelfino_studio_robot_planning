@@ -1,8 +1,8 @@
 // include/planning_pkg/common.hpp
 #pragma once
 
-#include <rmw/types.h>  // rmw_qos_profile_t
-#include "rclcpp/rclcpp.hpp"  // utile se vuoi QoS ecc. qui
+#include <rmw/types.h>
+#include <rclcpp/rclcpp.hpp>
 
 namespace planning_pkg::qos
 {
@@ -17,4 +17,4 @@ inline constexpr rmw_qos_profile_t qos_profile_custom1{
   RMW_QOS_LIVELINESS_LEASE_DURATION_DEFAULT,
   false
 };
-} // namespace planning_pkg::qos
+} 
