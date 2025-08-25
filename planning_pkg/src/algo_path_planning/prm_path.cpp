@@ -14,7 +14,7 @@
 
 namespace {
 
-inline void compute_bbox(const geometry_msgs::msg::Polygon& poly,
+inline void compute_bbox(const geometry_msgs::msg::Polygon& poly, 
                          double& minx, double& miny,
                          double& maxx, double& maxy)
 {
@@ -182,8 +182,82 @@ bool segment_is_valid(const geometry_msgs::msg::Point& a,
   return true;
 }
 
+std::vector<geometry_msgs::msg::Point> optimize_path_with_raycasting(
+    const std::vector<geometry_msgs::msg::Point>& original_path,
+    const obstacles_msgs::msg::ObstacleArrayMsg& obstacles,
+    const geometry_msgs::msg::Polygon& arena,
+    double clearance,
+    double sample_step)
+{
+    if (original_path.size() <= 2) {
+        return original_path; // Non c'è niente da ottimizzare
+    }
+    
+    std::vector<geometry_msgs::msg::Point> optimized_path;
+    optimized_path.push_back(original_path[0]); // Aggiungi sempre il punto di start
+    
+    size_t current_index = 0;
+    
+    while (current_index < original_path.size() - 1) {
+        size_t furthest_reachable = current_index;
+        
+        // Cerca il punto più lontano raggiungibile direttamente dal punto corrente
+        for (size_t test_index = current_index + 1; test_index < original_path.size(); ++test_index) {
+            if (segment_is_valid(original_path[current_index], 
+                               original_path[test_index], 
+                               arena, obstacles, clearance, sample_step)) {
+                furthest_reachable = test_index;
+            } else {
+                break; // Se questo punto non è raggiungibile, i successivi probabilmente non lo saranno
+            }
+        }
+        
+        // Se non possiamo andare oltre il prossimo punto, aggiungi il prossimo punto
+        if (furthest_reachable == current_index) {
+            // Caso di emergenza: non possiamo nemmeno raggiungere il prossimo punto
+            // Questo non dovrebbe succedere se il path originale è valido
+            RCLCPP_WARN(rclcpp::get_logger("prm_path_generator"),
+                       "Impossibile raggiungere il punto successivo durante l'ottimizzazione");
+            furthest_reachable = current_index + 1;
+        }
+        
+        // Se abbiamo raggiunto il goal, aggiungilo e termina
+        if (furthest_reachable == original_path.size() - 1) {
+            if (optimized_path.back().x != original_path.back().x || 
+                optimized_path.back().y != original_path.back().y) {
+                optimized_path.push_back(original_path.back());
+            }
+            break;
+        }
+        
+        // Altrimenti, aggiungi il punto più lontano raggiungibile (se diverso dal corrente)
+        if (furthest_reachable > current_index) {
+            optimized_path.push_back(original_path[furthest_reachable]);
+            current_index = furthest_reachable;
+        } else {
+            // Fallback: avanza di un punto
+            current_index++;
+            if (current_index < original_path.size()) {
+                optimized_path.push_back(original_path[current_index]);
+            }
+        }
+    }
+    
+    // Assicurati che il goal sia sempre presente
+    if (optimized_path.empty() || 
+        (optimized_path.back().x != original_path.back().x || 
+         optimized_path.back().y != original_path.back().y)) {
+        optimized_path.push_back(original_path.back());
+    }
+    
+    RCLCPP_INFO(rclcpp::get_logger("prm_path_generator"),
+                "Path ottimizzato: da %zu punti a %zu punti", 
+                original_path.size(), optimized_path.size());
+    
+    return optimized_path;
+}
 
-} // anon namespace
+} 
 
 // ============================================================================
 // planning_pkg::PrmPathGenerator
@@ -210,12 +284,9 @@ nav_msgs::msg::Path PrmPathGenerator::generate(
   if (waypoints.size() < 2) {
     return path;
   }
-
-  // Per semplicità, considera solo start e goal (primi e ultimi waypoints)
   const auto start = waypoints.front();
   const auto goal = waypoints.back();
 
-  // Crea una copia temporanea dei punti per includere start e goal
   std::vector<geometry_msgs::msg::Point> temp_points = random_points;
   std::vector<std::vector<int>> temp_adj = knn_adj;
   
@@ -312,17 +383,25 @@ nav_msgs::msg::Path PrmPathGenerator::generate(
     return path;
   }
 
-  // Converti indici in path usando temp_points
+  // Converti gli indici in punti
+  std::vector<geometry_msgs::msg::Point> original_path_points;
   for (int idx : path_indices) {
     if (idx >= 0 && static_cast<size_t>(idx) < temp_points.size()) {
+      original_path_points.push_back(temp_points[idx]);
+    }
+  }
+
+  std::vector<geometry_msgs::msg::Point> optimized_path_points = 
+      optimize_path_with_raycasting(original_path_points, obstacles, arena, 0.15, 0.05);
+
+  for (const auto& point : optimized_path_points) {
       geometry_msgs::msg::PoseStamped pose_stamped;
       pose_stamped.header = path.header;
       
-      pose_stamped.pose.position = temp_points[idx];
+      pose_stamped.pose.position = point;
       pose_stamped.pose.orientation.w = 1.0;
       
       path.poses.push_back(pose_stamped);
-    }
   }
 
   return path;

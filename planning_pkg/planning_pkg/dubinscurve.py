@@ -257,10 +257,10 @@ def dubins_segment(seg_param, seg_init, seg_type):
 def main():
     # User's waypoints: [x, y, heading (degrees)]
     pt1 = Waypoint(0,0,0)
-    # pt2 = Waypoint(6000,7000,260)
+    pt2 = Waypoint(6000,7000,260)
     pt3 = Waypoint(1000,15000,180)
     pt4 = Waypoint(0,0,270)
-    Wptz = [pt1, pt4]
+    Wptz = [pt1, pt2, pt3, pt4]
     # Run the code
     i = 0
     while i<len(Wptz)-1:
