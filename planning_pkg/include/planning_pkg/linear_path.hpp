@@ -6,6 +6,8 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "nav_msgs/msg/path.hpp"
+#include "obstacles_msgs/msg/obstacle_array_msg.hpp"
+#include "geometry_msgs/msg/polygon.hpp"
 
 namespace planning_pkg
 {
@@ -19,15 +21,26 @@ public:
   /**
    * @brief Genera un path lineare interpolando i waypoint con posa orientata lungo la direzione.
    * @param waypoints  vettore di (x,y)
-   * @param stamp      timestamp da usare nelle poses e nell'header
-   * @param frame_id   opzionale; se vuoto usa quello di default
-   * @param step_size  opzionale; se < 0 usa quello di default
+   * @param obstacles  array di ostacoli da evitare
+   * @param arena      poligono che definisce l'arena di gioco
    */
   nav_msgs::msg::Path generate(
     const std::vector<std::pair<double,double>>& waypoints,
-    const rclcpp::Time& stamp,
-    const std::string& frame_id = "",
-    double step_size = -1.0) const;
+    const obstacles_msgs::msg::ObstacleArrayMsg& obstacles,
+    const geometry_msgs::msg::Polygon& arena) const;
+
+  /**
+   * @brief Genera un path lineare semplice interpolando i waypoint
+   * @param waypoints  vettore di (x,y)
+   * @param timestamp  timestamp per il path
+   * @param frame_id   frame di riferimento
+   * @param step_size  dimensione del passo per l'interpolazione
+   */
+  nav_msgs::msg::Path generate(
+    const std::vector<std::pair<double,double>>& waypoints,
+    const rclcpp::Time& timestamp,
+    const std::string& frame_id,
+    double step_size) const;
 
   // Setter e getter opzionali
   void set_default_frame_id(const std::string& fid);

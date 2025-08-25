@@ -21,6 +21,7 @@ find_package(nav2_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
+find_package(ament_cmake_python REQUIRED)  
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
@@ -30,6 +31,13 @@ install(DIRECTORY
 
 install(DIRECTORY include/
   DESTINATION include
+)
+
+# Install python node for ros2 run
+install(PROGRAMS
+  planning_pkg/cell_decomposition.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME cell_decomposition
 )
 
 if(BUILD_TESTING)
@@ -64,9 +72,10 @@ add_executable(nav2_pathclient
   src/utils/nav2_pathclient.cpp
 )
 
-add_executable(dubins_converte
-  src/dubins_converte.cpp
+add_executable(smooth_converter
+  src/utils/smooth_converter.cpp
 )
+
 
 # Add executable for path_orchestrator and include PRM source
 add_executable(path_orchestrator 
@@ -136,13 +145,13 @@ ament_target_dependencies(nav2_pathclient
   obstacles_msgs
 )
 
-
-ament_target_dependencies(dubins_converte
+ament_target_dependencies(smooth_converter
   rclcpp
   nav_msgs
   geometry_msgs
   tf2
   tf2_geometry_msgs
+  std_srvs
 )
 
 target_include_directories(main_base PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -151,7 +160,7 @@ target_include_directories(nav2_pathclient PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/in
 target_include_directories(path_orchestrator PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(linear_path PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(prm_path PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_include_directories(dubins_converte PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(smooth_converter PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 
 
@@ -159,12 +168,10 @@ install(TARGETS
 main_base
 re_mapping
 nav2_pathclient
-
 path_orchestrator
 linear_path
 prm_path
-# comb_path
-dubins_converte
+smooth_converter
 DESTINATION lib/${PROJECT_NAME}
 )
 

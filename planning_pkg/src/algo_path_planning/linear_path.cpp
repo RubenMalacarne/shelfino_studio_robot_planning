@@ -18,16 +18,66 @@ LinearPathGenerator::LinearPathGenerator(std::string default_frame_id,
 
 nav_msgs::msg::Path LinearPathGenerator::generate(
   const std::vector<std::pair<double,double>>& waypoints,
-  const rclcpp::Time& stamp,
+  const obstacles_msgs::msg::ObstacleArrayMsg& obstacles,
+  const geometry_msgs::msg::Polygon& arena) const
+{
+  nav_msgs::msg::Path path;
+  
+  // Use current time and default frame
+  path.header.stamp = rclcpp::Clock().now();
+  path.header.frame_id = default_frame_id_;
+
+  if (waypoints.size() < 2) {
+    return path; // vuoto
+  }
+
+  // TODO: Use obstacles and arena for path planning logic here
+  // For now, keeping the existing linear interpolation logic
+
+  for (size_t i = 0; i + 1 < waypoints.size(); ++i) {
+    const auto [x0, y0] = waypoints[i];
+    const auto [x1, y1] = waypoints[i + 1];
+
+    const double dx = x1 - x0;
+    const double dy = y1 - y0;
+    const double distance = std::hypot(dx, dy);
+
+    const std::size_t steps = std::max<std::size_t>(
+      1, static_cast<std::size_t>(std::floor(distance / default_step_size_)));
+
+    const double yaw = std::atan2(dy, dx);
+    tf2::Quaternion q;
+    q.setRPY(0.0, 0.0, yaw);
+
+    for (std::size_t s = 0; s <= steps; ++s) {
+      const double ratio = static_cast<double>(s) / static_cast<double>(steps);
+      const double x = x0 + ratio * dx;
+      const double y = y0 + ratio * dy;
+
+      geometry_msgs::msg::PoseStamped pose;
+      pose.header.stamp = path.header.stamp;
+      pose.header.frame_id = path.header.frame_id;
+      pose.pose.position.x = x;
+      pose.pose.position.y = y;
+      pose.pose.position.z = 0.0;
+      pose.pose.orientation = tf2::toMsg(q);
+      path.poses.push_back(std::move(pose));
+    }
+  }
+
+  return path;
+}
+
+nav_msgs::msg::Path LinearPathGenerator::generate(
+  const std::vector<std::pair<double,double>>& waypoints,
+  const rclcpp::Time& timestamp,
   const std::string& frame_id,
   double step_size) const
 {
   nav_msgs::msg::Path path;
-  const std::string fid = frame_id.empty() ? default_frame_id_ : frame_id;
-  const double ds = (step_size > 0.0) ? step_size : default_step_size_;
-
-  path.header.stamp = stamp;
-  path.header.frame_id = fid;
+  
+  path.header.stamp = timestamp;
+  path.header.frame_id = frame_id;
 
   if (waypoints.size() < 2) {
     return path; // vuoto
@@ -42,7 +92,7 @@ nav_msgs::msg::Path LinearPathGenerator::generate(
     const double distance = std::hypot(dx, dy);
 
     const std::size_t steps = std::max<std::size_t>(
-      1, static_cast<std::size_t>(std::floor(distance / ds)));
+      1, static_cast<std::size_t>(std::floor(distance / step_size)));
 
     const double yaw = std::atan2(dy, dx);
     tf2::Quaternion q;
@@ -54,8 +104,8 @@ nav_msgs::msg::Path LinearPathGenerator::generate(
       const double y = y0 + ratio * dy;
 
       geometry_msgs::msg::PoseStamped pose;
-      pose.header.stamp = stamp;
-      pose.header.frame_id = fid;
+      pose.header.stamp = path.header.stamp;
+      pose.header.frame_id = path.header.frame_id;
       pose.pose.position.x = x;
       pose.pose.position.y = y;
       pose.pose.position.z = 0.0;

@@ -27,13 +27,13 @@ public:
    
     auto qos = rclcpp::QoS(rclcpp::KeepLast(1));
       _path_subscription1 = this->create_subscription<nav_msgs::msg::Path>(
-    "/path_1_smoothed", qos,
+    "/path_1_run", qos,
     [this, client = client1_ptr_](nav_msgs::msg::Path::ConstSharedPtr msg) {
       this->store_path(*msg, client, "shelfino1");
     });
 
     _path_subscription2 = this->create_subscription<nav_msgs::msg::Path>(
-    "/path_2_smoothed", qos,
+    "/path_2_run", qos,
     [this, client = client2_ptr_](nav_msgs::msg::Path::ConstSharedPtr msg) {
       this->store_path(*msg, client, "shelfino2");
     });

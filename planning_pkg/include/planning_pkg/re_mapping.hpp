@@ -91,7 +91,7 @@ private:
   void callback_pos2(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
   
   // Service callback
-  void on_trigger(
+  void callback_trigger(
     const std::shared_ptr<std_srvs::srv::Trigger::Request>,
     std::shared_ptr<std_srvs::srv::Trigger::Response> res); 
   

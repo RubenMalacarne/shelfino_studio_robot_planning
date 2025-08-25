@@ -36,7 +36,7 @@ ReMapping::ReMapping() : Node("ReMapping")
   // Service
   srv_trigger = this->create_service<std_srvs::srv::Trigger>(
     "/service_trigger_inflated",   // nome del service
-    std::bind(&ReMapping::on_trigger, this, std::placeholders::_1, std::placeholders::_2)
+    std::bind(&ReMapping::callback_trigger, this, std::placeholders::_1, std::placeholders::_2)
   );
   // ros2 service call /service_trigger_inflated std_srvs/srv/Trigger {}
   }
@@ -109,7 +109,7 @@ void ReMapping::callback_pos2(const geometry_msgs::msg::PoseWithCovarianceStampe
 }
 
 // ==== Service callback ====
-void ReMapping::on_trigger(const std::shared_ptr<std_srvs::srv::Trigger::Request>, std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+void ReMapping::callback_trigger(const std::shared_ptr<std_srvs::srv::Trigger::Request>, std::shared_ptr<std_srvs::srv::Trigger::Response> response)
 {
   std::string status_msg = "Published: ";
   bool success = false;
