@@ -52,3 +52,6 @@ def generate_launch_description():
     ]
 
     return launch.LaunchDescription(nodes)
+
+# to launch the service smooth and send the path:  
+# ros2 service call /service_trigger_smoothing_path std_srvs/srv/Trigger {}
