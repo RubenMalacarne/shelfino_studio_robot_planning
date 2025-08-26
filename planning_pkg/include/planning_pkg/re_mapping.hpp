@@ -56,7 +56,7 @@ public:
     
     // Map values
     std::vector<pose_t> gates;
-    double distance_ahead = 0.5;
+    double distance_ahead = 0.0;
     // Position storage
     pose_t pos1;
     pose_t pos2;

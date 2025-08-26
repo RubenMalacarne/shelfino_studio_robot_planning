@@ -319,16 +319,14 @@ private:
   {
     auto out_path = smoothPath(msg);
     latest_smoothed_path_1_ = out_path;
-    pub_path_out_path_->publish(out_path);
-    RCLCPP_INFO(get_logger(), "Published /path_1_smoothed with %zu poses.", out_path.poses.size());
+    RCLCPP_INFO(get_logger(), "Smoothed path_1 ready with %zu poses.", out_path.poses.size());
   }
   
   void pathCallback2(const nav_msgs::msg::Path::SharedPtr msg)
   {
     auto out_path = smoothPath(msg);
     latest_smoothed_path_2_ = out_path;
-    pub_path_out_path_2_->publish(out_path);
-    RCLCPP_INFO(get_logger(), "Published /path_2_smoothed with %zu poses.", out_path.poses.size());
+    RCLCPP_INFO(get_logger(), "Smoothed path_2 ready with %zu poses.", out_path.poses.size());
   }
   // ==== Members and Parameters====
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr sub_path_in_;
@@ -355,3 +353,6 @@ int main(int argc, char **argv)
   rclcpp::shutdown();
   return 0;
 }
+
+// to launch the service smooth and send the path:  
+// ros2 service call /service_trigger_smoothing_path std_srvs/srv/Trigger {}
