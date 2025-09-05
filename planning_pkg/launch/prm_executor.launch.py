@@ -5,27 +5,22 @@ from launch_ros.substitutions import FindPackageShare
 from launch.actions import TimerAction
 
 def generate_launch_description():
-    #python file example
-    # cr_mirror_node = launch_ros.actions.Node(
-    #     package='cr_vision',
-    #     executable='mirror_scena.py', 
-    #     name='mirror_camera_node',
-    #     output='screen',
-    # )
-
     re_mapping_node = launch_ros.actions.Node(
+        period=0.0,
         package='planning_pkg',
         executable='re_mapping',  
         name='re_mapping',
         output='screen'
     )
     nav2_pathclient_node = launch_ros.actions.Node(
+        period=0.0,
         package='planning_pkg',
         executable='nav2_pathclient',  
         name='nav2_pathclient',
         output='screen'
     )
     smooth_converter_node = launch_ros.actions.Node(
+        period=1.0,
         package='planning_pkg',
         executable='smooth_converter',  
         name='smooth_converter',
@@ -33,12 +28,12 @@ def generate_launch_description():
     )
     
     prm_orchestrator_node = TimerAction(
-        period=1.0,
+        period=2.0,
         actions=[
             launch_ros.actions.Node(
                 package='planning_pkg',
-                executable='path_orchestrator',
-                name='path_orchestrator',
+                executable='path_orchestrator_prm',
+                name='path_orchestrator_prm',
                 output='screen'
             )
         ]
