@@ -60,6 +60,10 @@ add_library(prm_path
   src/algo_path_planning/prm_path.cpp
 )
 
+add_library(comb_path
+  src/algo_path_planning/comb_path.cpp
+)
+
 add_executable(main_base
   src/main_base.cpp
 )
@@ -78,9 +82,14 @@ add_executable(smooth_converter
 
 
 # Add executable for path_orchestrator and include PRM source
-add_executable(path_orchestrator 
-  src/path_orchestrator.cpp
+add_executable(path_orchestrator_prm 
+  src/path_orchestrator_prm.cpp
   src/algo_path_planning/prm_path.cpp
+)
+
+add_executable(path_orchestrator_comb
+  src/path_orchestrator_comb.cpp
+  src/algo_path_planning/comb_path.cpp
 )
 
 ament_target_dependencies(linear_path
@@ -93,6 +102,16 @@ ament_target_dependencies(linear_path
 )
 
 ament_target_dependencies(prm_path
+  rclcpp
+  nav_msgs
+  geometry_msgs
+  tf2
+  tf2_geometry_msgs
+  obstacles_msgs  
+)
+
+
+ament_target_dependencies(comb_path
   rclcpp
   nav_msgs
   geometry_msgs
@@ -120,7 +139,7 @@ ament_target_dependencies(re_mapping
 )
 
 
-ament_target_dependencies(path_orchestrator 
+ament_target_dependencies(path_orchestrator_prm 
   rclcpp 
   std_srvs
   visualization_msgs
@@ -130,6 +149,17 @@ ament_target_dependencies(path_orchestrator
   tf2
   tf2_geometry_msgs
 )
+ament_target_dependencies(path_orchestrator_comb 
+  rclcpp 
+  std_srvs
+  visualization_msgs
+  geometry_msgs
+  nav_msgs
+  obstacles_msgs
+  tf2
+  tf2_geometry_msgs
+)
+
 
 
 ament_target_dependencies(nav2_pathclient
@@ -157,10 +187,12 @@ ament_target_dependencies(smooth_converter
 target_include_directories(main_base PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(re_mapping PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(nav2_pathclient PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_include_directories(path_orchestrator PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(path_orchestrator_prm PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(path_orchestrator_comb PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(linear_path PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_include_directories(prm_path PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(comb_path PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(smooth_converter PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(prm_path PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 
 
@@ -168,9 +200,11 @@ install(TARGETS
 main_base
 re_mapping
 nav2_pathclient
-path_orchestrator
+path_orchestrator_prm
+path_orchestrator_comb
 linear_path
 prm_path
+comb_path
 smooth_converter
 DESTINATION lib/${PROJECT_NAME}
 )

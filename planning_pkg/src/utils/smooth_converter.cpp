@@ -70,7 +70,7 @@ public:
 
     turning_radius_ = declare_parameter<double>("turning_radius", 0.50);
     sample_step_ = declare_parameter<double>("sample_step", 0.05);
-    min_segment_keep_ = declare_parameter<double>("min_segment_keep", 1e-4); // margine anti-degenerazione
+    min_segment_keep_ = declare_parameter<double>("min_segment_keep", 1e-4); 
     angle_eps_ = declare_parameter<double>("angle_eps", 1e-3);               // ~0.057°
     join_eps_ = declare_parameter<double>("join_eps", 1e-6);
 
@@ -92,7 +92,7 @@ public:
 
     // Trigger service
     srv_trigger = this->create_service<std_srvs::srv::Trigger>(
-      "/service_trigger_smoothing_path",   // nome del service
+      "/service_trigger_smoothing_path",   
       std::bind(&SmoothPathNode::callback_trigger, this, std::placeholders::_1, std::placeholders::_2)
     );
 
@@ -140,7 +140,6 @@ private:
       return out_path;
     }
 
-    // Estrai punti XY
     std::vector<Vec2> pts;
     pts.reserve(msg->poses.size());
     for (const auto &ps : msg->poses)
@@ -148,7 +147,6 @@ private:
       pts.emplace_back(ps.pose.position.x, ps.pose.position.y);
     }
 
-    // Helper per push con deduplica
     auto push_pose = [&](const Vec2 &p, double yaw)
     {
       if (!out_path.poses.empty())
@@ -166,7 +164,6 @@ private:
       out_path.poses.push_back(ps);
     };
 
-    // Primo punto
     {
       Vec2 p0 = pts[0];
       Vec2 p1 = pts[1];
@@ -175,7 +172,6 @@ private:
       push_pose(p0, yaw0);
     }
 
-    // Loop sui vertici
     for (size_t i = 1; i + 1 < pts.size(); ++i)
     {
       Vec2 Pm = pts[i - 1];
@@ -201,7 +197,6 @@ private:
       double sinphi = cross(uhat, vhat);
       double phi = std::atan2(sinphi, cosphi);
 
-      // phi piccolo => niente arco: mantieni il vertice (smusseremo con sampling)
       if (std::abs(phi) < angle_eps_)
       {
         double yawP = angleOf(vhat);
@@ -253,7 +248,6 @@ private:
         push_pose(E, angleOf(uhat));
       }
 
-      // Arco E->X
       double angE = std::atan2(E.y - C.y, E.x - C.x);
       double angX = std::atan2(X.y - C.y, X.x - C.x);
 
@@ -287,7 +281,6 @@ private:
       }
     }
 
-    // Ultimo tratto
     {
       Vec2 last_added{out_path.poses.back().pose.position.x, out_path.poses.back().pose.position.y};
       Vec2 Pend = pts.back();
@@ -328,6 +321,7 @@ private:
     latest_smoothed_path_2_ = out_path;
     RCLCPP_INFO(get_logger(), "Smoothed path_2 ready with %zu poses.", out_path.poses.size());
   }
+  
   // ==== Members and Parameters====
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr sub_path_in_;
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr sub_path_in_2_;

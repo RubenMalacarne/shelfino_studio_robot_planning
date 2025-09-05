@@ -22,16 +22,13 @@ public:
   {
     // Action clients 
     client1_ptr_ = rclcpp_action::create_client<FollowPath>(this, "/shelfino1/follow_path");
-    client2_ptr_ = rclcpp_action::create_client<FollowPath>(this, "/shelfino3/follow_path");
-
-   
+    client2_ptr_ = rclcpp_action::create_client<FollowPath>(this, "/shelfino3/follow_path");   
     auto qos = rclcpp::QoS(rclcpp::KeepLast(1));
       _path_subscription1 = this->create_subscription<nav_msgs::msg::Path>(
     "/path_1_run", qos,
     [this, client = client1_ptr_](nav_msgs::msg::Path::ConstSharedPtr msg) {
       this->store_path(*msg, client, "shelfino1");
     });
-
     _path_subscription2 = this->create_subscription<nav_msgs::msg::Path>(
     "/path_2_run", qos,
     [this, client = client2_ptr_](nav_msgs::msg::Path::ConstSharedPtr msg) {
@@ -40,18 +37,18 @@ public:
 
     
     if (!client1_ptr_->wait_for_action_server(std::chrono::seconds(10))) {
-      RCLCPP_ERROR(this->get_logger(), "Action server /shelfino1/follow_path non disponibile.");
+      RCLCPP_ERROR(this->get_logger(), "Action server /shelfino1/follow_path not available.");
     } else {
       RCLCPP_INFO(this->get_logger(), "Action server /shelfino1/follow_path OK.");
     }
 
     if (!client2_ptr_->wait_for_action_server(std::chrono::seconds(10))) {
-      RCLCPP_ERROR(this->get_logger(), "Action server /shelfino2/follow_path non disponibile.");
+      RCLCPP_ERROR(this->get_logger(), "Action server /shelfino2/follow_path not available.");
     } else {
       RCLCPP_INFO(this->get_logger(), "Action server /shelfino2/follow_path OK.");
     }
 
-    RCLCPP_INFO(this->get_logger(), "Nav2Client pronto. In attesa dei path...");
+    RCLCPP_INFO(this->get_logger(), "Nav2Client ready. Waiting for paths...");
   }
 
 private:
@@ -61,19 +58,19 @@ private:
                        const std::string &who)
   {
     if (!client || !client->action_server_is_ready()) {
-      RCLCPP_ERROR(this->get_logger(), "[%s] action server non pronto.", who.c_str());
+      RCLCPP_ERROR(this->get_logger(), "[%s] action server not ready.", who.c_str());
       return;
     }
     if (path.poses.empty()) {
-      RCLCPP_WARN(this->get_logger(), "[%s] path vuoto, goal NON inviato.", who.c_str());
+      RCLCPP_WARN(this->get_logger(), "[%s] path vuoto, goal NOT send !!!, please check algorithm", who.c_str());
       return;
     }
 
     FollowPath::Goal goal;
     goal.path = path;
-    goal.controller_id = "";       // usa controller di default
-    goal.goal_checker_id = "";     // usa goal checker di default
-    //da controllare !!!!
+    goal.controller_id = "";       
+    goal.goal_checker_id = "";     
+    
     rclcpp_action::Client<FollowPath>::SendGoalOptions opts;
     opts.goal_response_callback =
         [this, who](std::shared_ptr<rclcpp_action::ClientGoalHandle<FollowPath>> handle) {
@@ -87,16 +84,16 @@ private:
         [this, who](const rclcpp_action::ClientGoalHandle<FollowPath>::WrappedResult &res) {
           switch (res.code) {
             case rclcpp_action::ResultCode::SUCCEEDED:
-              RCLCPP_INFO(this->get_logger(), "[%s] goal COMPLETATO.", who.c_str());
+              RCLCPP_INFO(this->get_logger(), "[%s] goal COMPLETE.", who.c_str());
               break;
             case rclcpp_action::ResultCode::ABORTED:
-              RCLCPP_ERROR(this->get_logger(), "[%s] goal ABORTITO.", who.c_str());
+              RCLCPP_ERROR(this->get_logger(), "[%s] goal ABORTED.", who.c_str());
               break;
             case rclcpp_action::ResultCode::CANCELED:
-              RCLCPP_WARN(this->get_logger(), "[%s] goal CANCELLATO.", who.c_str());
+              RCLCPP_WARN(this->get_logger(), "[%s] goal CANCEL.", who.c_str());
               break;
             default:
-              RCLCPP_ERROR(this->get_logger(), "[%s] risultato sconosciuto.", who.c_str());
+              RCLCPP_ERROR(this->get_logger(), "[%s] risultato UNKWON.", who.c_str());
               break;
           }
         };
@@ -113,7 +110,7 @@ private:
     path.header.stamp = this->get_clock()->now();
     if (path.header.frame_id.empty()) path.header.frame_id = "map";
 
-    RCLCPP_INFO(this->get_logger(), "Path ricevuto per %s: %zu poses. Invio...", 
+    RCLCPP_INFO(this->get_logger(), "Path Recived for %s: %zu poses. Send, please wait...", 
                 robot_name.c_str(), path.poses.size());
     send_path_goal_(client, path, robot_name);
   }

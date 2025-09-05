@@ -112,8 +112,7 @@ void ReMapping::callback_pos2(const geometry_msgs::msg::PoseWithCovarianceStampe
 void ReMapping::callback_trigger(const std::shared_ptr<std_srvs::srv::Trigger::Request>, std::shared_ptr<std_srvs::srv::Trigger::Response> response)
 {
   std::string status_msg = "Published: ";
-  bool success = false;
-  
+  bool success = false;  
   if (have_obstacles_) {
     pub_obstacles_inflated->publish(last_inflated_obstacles_);
     pub_viz_obstacles_->publish(viz_obstacles_markers_);
@@ -238,8 +237,6 @@ void ReMapping::set_borders(const geometry_msgs::msg::Polygon &msg)
   // Handle the borders of the arena
   RCLCPP_INFO(this->get_logger(), "Setting borders");
   
-  
-  
   //compute centroid
   const auto &pts_in = msg.points;
   const size_t n = pts_in.size();
@@ -295,7 +292,6 @@ void ReMapping::set_gates(const geometry_msgs::msg::PoseArray &msg)
 void ReMapping::set_pos(pose_t& pos, const geometry_msgs::msg::PoseWithCovarianceStamped& msg)
 {
   RCLCPP_INFO(this->get_logger(), "Setting position");
-
   pos.clear(); // Clear previous data
   pos.push_back(msg.pose.pose.position.x);
   pos.push_back(msg.pose.pose.position.y);
@@ -320,7 +316,6 @@ void ReMapping::publish_gates()
     pose.position.x = gate[0];
     pose.position.y = gate[1];
     pose.position.z = 0.0;
-    
     // Convert yaw to quaternion
     tf2::Quaternion q;
     q.setRPY(0, 0, gate[2]);
@@ -331,7 +326,6 @@ void ReMapping::publish_gates()
     
     gates_msg.poses.push_back(pose);
   }
-  
   pub_gates_->publish(gates_msg);
 }
 
@@ -344,7 +338,6 @@ void ReMapping::publish_pos(pose_t pos){
     pos_msg.pose.pose.position.x = pos[0] + distance_ahead * std::cos(yaw);
     pos_msg.pose.pose.position.y = pos[1] + distance_ahead * std::sin(yaw);
     pos_msg.pose.pose.position.z = 0.0;
-    
     // Convert yaw to quaternion
     tf2::Quaternion q;
     q.setRPY(0, 0, yaw);
