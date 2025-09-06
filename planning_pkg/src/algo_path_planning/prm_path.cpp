@@ -1,4 +1,5 @@
 #include "planning_pkg/prm_path.hpp"
+#include "planning_pkg/common_function.hpp"
 
 #include <algorithm>   // std::min, std::max, std::clamp
 #include <cmath>       // std::sqrt
@@ -12,252 +13,6 @@
 #include <geometry_msgs/msg/point.hpp>
 #include <nav_msgs/msg/path.hpp>
 
-namespace {
-
-inline void compute_bbox(const geometry_msgs::msg::Polygon& poly, 
-                         double& minx, double& miny,
-                         double& maxx, double& maxy)
-{
-  if (poly.points.empty()) {
-    minx = miny = maxx = maxy = 0.0;
-    return;
-  }
-  minx = maxx = poly.points.front().x;
-  miny = maxy = poly.points.front().y;
-  for (const auto& p : poly.points) {
-    minx = std::min(minx, static_cast<double>(p.x));
-    miny = std::min(miny, static_cast<double>(p.y));
-    maxx = std::max(maxx, static_cast<double>(p.x));
-    maxy = std::max(maxy, static_cast<double>(p.y));
-  }
-}
-
-bool point_in_polygon(const geometry_msgs::msg::Polygon& poly, double x, double y)
-{
-  bool inside = false;
-  const auto n = poly.points.size();
-  if (n < 3) return false;
-
-  for (std::size_t i = 0, j = n - 1; i < n; j = i++) {
-    const auto& pi = poly.points[i];
-    const auto& pj = poly.points[j];
-    const bool intersect =
-      ((static_cast<double>(pi.y) > y) != (static_cast<double>(pj.y) > y)) &&
-      (x < (static_cast<double>(pj.x) - static_cast<double>(pi.x)) *
-                (y - static_cast<double>(pi.y)) /
-                ((static_cast<double>(pj.y) - static_cast<double>(pi.y)) + 1e-12) +
-              static_cast<double>(pi.x));
-    if (intersect) inside = !inside;
-  }
-  return inside;
-}
-
-inline double sqr(double v) { return v * v; }
-
-inline double point_to_segment_distance(double px, double py,
-                                        double ax, double ay,
-                                        double bx, double by)
-{
-  const double vx = bx - ax;
-  const double vy = by - ay;
-  const double wx = px - ax;
-  const double wy = py - ay;
-
-  const double c1 = vx * wx + vy * wy;
-  if (c1 <= 0.0) {
-    return std::sqrt(sqr(px - ax) + sqr(py - ay));
-  }
-  const double c2 = vx * vx + vy * vy;
-  if (c2 <= 1e-15) {
-    // segmento quasi nullo
-    return std::sqrt(sqr(px - ax) + sqr(py - ay));
-  }
-  const double t = std::clamp(c1 / c2, 0.0, 1.0);
-  const double projx = ax + t * vx;
-  const double projy = ay + t * vy;
-  return std::sqrt(sqr(px - projx) + sqr(py - projy));
-}
-
-double distance_to_polygon_edges(const geometry_msgs::msg::Polygon& poly,
-                                 double x, double y)
-{
-  const auto n = poly.points.size();
-  if (n < 2) return std::numeric_limits<double>::infinity();
-
-  double dmin = std::numeric_limits<double>::infinity();
-  for (std::size_t i = 0, j = n - 1; i < n; j = i++) {
-    const auto& pi = poly.points[i];
-    const auto& pj = poly.points[j];
-    const double d = point_to_segment_distance(
-      x, y,
-      static_cast<double>(pj.x), static_cast<double>(pj.y),
-      static_cast<double>(pi.x), static_cast<double>(pi.y)
-    );
-    if (d < dmin) dmin = d;
-  }
-  return dmin;
-}
-
-// Controllo validità con clearance rispetto ad arena e ostacoli
-bool point_is_valid(double x, double y,
-                    const geometry_msgs::msg::Polygon& arena,
-                    const obstacles_msgs::msg::ObstacleArrayMsg& obstacles,
-                    double clearance)
-{
-  // dentro l'arena
-  if (!point_in_polygon(arena, x, y)) return false;
-
-  // distanza dal bordo arena
-  if (clearance > 0.0) {
-    const double d_arena = distance_to_polygon_edges(arena, x, y);
-    if (d_arena < clearance) return false;
-  }
-
-  // fuori da ogni ostacolo + clearance dai bordi degli ostacoli
-  for (const auto& obs : obstacles.obstacles) {
-    // Gestione ostacoli circolari
-    if (obs.radius > 0.0) {
-      const double dx = x - obs.polygon.points[0].x; // centro del cerchio
-      const double dy = y - obs.polygon.points[0].y;
-      const double distance_to_center = std::sqrt(dx * dx + dy * dy);
-      
-      // Punto dentro il cerchio
-      if (distance_to_center <= obs.radius) return false;
-      
-      // Clearance dal bordo del cerchio
-      if (clearance > 0.0) {
-        const double distance_to_edge = distance_to_center - obs.radius;
-        if (distance_to_edge < clearance) return false;
-      }
-    }
-    // Gestione ostacoli poligonali
-    else {
-      const geometry_msgs::msg::Polygon& opoly = obs.polygon;
-      if (point_in_polygon(opoly, x, y)) return false;
-
-      if (clearance > 0.0) {
-        const double d_obs = distance_to_polygon_edges(opoly, x, y);
-        if (d_obs < clearance) return false;
-      }
-    }
-  }
-  return true;
-  
-}
-
-
-inline double dist2(const geometry_msgs::msg::Point& a,
-                    const geometry_msgs::msg::Point& b)
-{
-  const double dx = static_cast<double>(a.x) - static_cast<double>(b.x);
-  const double dy = static_cast<double>(a.y) - static_cast<double>(b.y);
-  return dx*dx + dy*dy;
-}
-
-// Verifica che il segmento AB sia interamente valido (dentro arena, fuori da ostacoli e a distanza >= clearance).
-// Approccio: campionamento uniforme lungo il segmento con passo "sample_step" (>= 0.01 consigliato).
-bool segment_is_valid(const geometry_msgs::msg::Point& a,
-                      const geometry_msgs::msg::Point& b,
-                      const geometry_msgs::msg::Polygon& arena,
-                      const obstacles_msgs::msg::ObstacleArrayMsg& obstacles,
-                      double clearance,
-                      double sample_step)
-{
-  // Clamp passo
-  if (sample_step < 0.01) sample_step = 0.01;
-
-  const double len = std::sqrt(dist2(a, b));
-  // almeno 2 campioni (estremi compresi)
-  const int samples = std::max(2, static_cast<int>(std::ceil(len / sample_step)) + 1);
-
-  for (int i = 0; i < samples; ++i) {
-    const double t = static_cast<double>(i) / static_cast<double>(samples - 1);
-    const double x = a.x + t * (b.x - a.x);
-    const double y = a.y + t * (b.y - a.y);
-
-    if (!point_is_valid(x, y, arena, obstacles, clearance)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-std::vector<geometry_msgs::msg::Point> optimize_path_with_raycasting(
-    const std::vector<geometry_msgs::msg::Point>& original_path,
-    const obstacles_msgs::msg::ObstacleArrayMsg& obstacles,
-    const geometry_msgs::msg::Polygon& arena,
-    double clearance,
-    double sample_step)
-{
-    if (original_path.size() <= 2) {
-        return original_path; // Non c'è niente da ottimizzare
-    }
-    
-    std::vector<geometry_msgs::msg::Point> optimized_path;
-    optimized_path.push_back(original_path[0]); // Aggiungi sempre il punto di start
-    
-    size_t current_index = 0;
-    
-    while (current_index < original_path.size() - 1) {
-        size_t furthest_reachable = current_index;
-        
-        // Cerca il punto più lontano raggiungibile direttamente dal punto corrente
-        for (size_t test_index = current_index + 1; test_index < original_path.size(); ++test_index) {
-            if (segment_is_valid(original_path[current_index], 
-                               original_path[test_index], 
-                               arena, obstacles, clearance, sample_step)) {
-                furthest_reachable = test_index;
-            } else {
-                break; // Se questo punto non è raggiungibile, i successivi probabilmente non lo saranno
-            }
-        }
-        
-        // Se non possiamo andare oltre il prossimo punto, aggiungi il prossimo punto
-        if (furthest_reachable == current_index) {
-            // Caso di emergenza: non possiamo nemmeno raggiungere il prossimo punto
-            // Questo non dovrebbe succedere se il path originale è valido
-            RCLCPP_WARN(rclcpp::get_logger("prm_path_generator"),
-                       "Impossibile raggiungere il punto successivo durante l'ottimizzazione");
-            furthest_reachable = current_index + 1;
-        }
-        
-        // Se abbiamo raggiunto il goal, aggiungilo e termina
-        if (furthest_reachable == original_path.size() - 1) {
-            if (optimized_path.back().x != original_path.back().x || 
-                optimized_path.back().y != original_path.back().y) {
-                optimized_path.push_back(original_path.back());
-            }
-            break;
-        }
-        
-        // Altrimenti, aggiungi il punto più lontano raggiungibile (se diverso dal corrente)
-        if (furthest_reachable > current_index) {
-            optimized_path.push_back(original_path[furthest_reachable]);
-            current_index = furthest_reachable;
-        } else {
-            // Fallback: avanza di un punto
-            current_index++;
-            if (current_index < original_path.size()) {
-                optimized_path.push_back(original_path[current_index]);
-            }
-        }
-    }
-    
-    // Assicurati che il goal sia sempre presente
-    if (optimized_path.empty() || 
-        (optimized_path.back().x != original_path.back().x || 
-         optimized_path.back().y != original_path.back().y)) {
-        optimized_path.push_back(original_path.back());
-    }
-    
-    RCLCPP_INFO(rclcpp::get_logger("prm_path_generator"),
-                "Path ottimizzato: da %zu punti a %zu punti", 
-                original_path.size(), optimized_path.size());
-    
-    return optimized_path;
-}
-
-} 
 
 // ============================================================================
 // planning_pkg::PrmPathGenerator
@@ -297,7 +52,7 @@ nav_msgs::msg::Path PrmPathGenerator::generate(
   start_point.z = 0.0;
   
   // Verifica che start sia valido
-  if (!point_is_valid(start.first, start.second, arena, obstacles, 0.15)) {
+  if (!CommonFunction::point_is_valid(start.first, start.second, arena, obstacles, 0.15)) {
     RCLCPP_ERROR(rclcpp::get_logger("prm_path_generator"), 
                  "Punto di start non valido");
     return path;
@@ -314,7 +69,7 @@ nav_msgs::msg::Path PrmPathGenerator::generate(
   goal_point.z = 0.0;
   
   // Verifica che goal sia valido
-  if (!point_is_valid(goal.first, goal.second, arena, obstacles, 0.15)) {
+  if (!CommonFunction::point_is_valid(goal.first, goal.second, arena, obstacles, 0.15)) {
     RCLCPP_ERROR(rclcpp::get_logger("prm_path_generator"), 
                  "Punto di goal non valido");
     return path;
@@ -331,7 +86,7 @@ nav_msgs::msg::Path PrmPathGenerator::generate(
   // Connetti start
   std::vector<std::pair<double, int>> start_distances;
   for (size_t i = 0; i < random_points.size(); ++i) {
-    double dist = std::sqrt(dist2(start_point, random_points[i]));
+    double dist = std::sqrt(CommonFunction::dist2(start_point, random_points[i]));
     if (dist <= max_connection_distance) {
       start_distances.emplace_back(dist, static_cast<int>(i));
     }
@@ -342,7 +97,7 @@ nav_msgs::msg::Path PrmPathGenerator::generate(
   
   for (size_t i = 0; i < start_connections; ++i) {
     int neighbor = start_distances[i].second;
-    if (segment_is_valid(start_point, random_points[neighbor], arena, obstacles, 0.15, 0.05)) {
+    if (CommonFunction::segment_is_valid(start_point, random_points[neighbor], arena, obstacles, 0.15, 0.05)) {
       temp_adj[start_node].push_back(neighbor);
       temp_adj[neighbor].push_back(start_node);
     }
@@ -351,7 +106,7 @@ nav_msgs::msg::Path PrmPathGenerator::generate(
   // Connetti goal
   std::vector<std::pair<double, int>> goal_distances;
   for (size_t i = 0; i < random_points.size(); ++i) {
-    double dist = std::sqrt(dist2(goal_point, random_points[i]));
+    double dist = std::sqrt(CommonFunction::dist2(goal_point, random_points[i]));
     if (dist <= max_connection_distance) {
       goal_distances.emplace_back(dist, static_cast<int>(i));
     }
@@ -362,14 +117,14 @@ nav_msgs::msg::Path PrmPathGenerator::generate(
   
   for (size_t i = 0; i < goal_connections; ++i) {
     int neighbor = goal_distances[i].second;
-    if (segment_is_valid(goal_point, random_points[neighbor], arena, obstacles, 0.15, 0.05)) {
+    if (CommonFunction::segment_is_valid(goal_point, random_points[neighbor], arena, obstacles, 0.15, 0.05)) {
       temp_adj[goal_node].push_back(neighbor);
       temp_adj[neighbor].push_back(goal_node);
     }
   }
   
   // Verifica connessione diretta start-goal
-  if (segment_is_valid(start_point, goal_point, arena, obstacles, 0.15, 0.05)) {
+  if (CommonFunction::segment_is_valid(start_point, goal_point, arena, obstacles, 0.15, 0.05)) {
     temp_adj[start_node].push_back(goal_node);
     temp_adj[goal_node].push_back(start_node);
   }
@@ -392,7 +147,7 @@ nav_msgs::msg::Path PrmPathGenerator::generate(
   }
 
   std::vector<geometry_msgs::msg::Point> optimized_path_points = 
-      optimize_path_with_raycasting(original_path_points, obstacles, arena, 0.15, 0.05);
+      CommonFunction::optimize_path_with_raycasting(original_path_points, obstacles, arena, 0.15, 0.05);
 
   for (const auto& point : optimized_path_points) {
       geometry_msgs::msg::PoseStamped pose_stamped;
@@ -442,7 +197,7 @@ std::vector<int> PrmPathGenerator::dijkstra_shortest_path_temp(
     
     for (int v : adjacency[u]) {
       if (!visited[v]) {
-        double weight = std::sqrt(dist2(points[u], points[v]));
+        double weight = std::sqrt(CommonFunction::dist2(points[u], points[v]));
         double alt = dist[u] + weight;
         if (alt < dist[v]) {
           dist[v] = alt;
@@ -477,7 +232,7 @@ void PrmPathGenerator::sample_random_points(
   }
 
   double minx, miny, maxx, maxy;
-  compute_bbox(arena, minx, miny, maxx, maxy);
+  CommonFunction::compute_bbox(arena, minx, miny, maxx, maxy);
 
   std::random_device rd;
   std::mt19937 gen(rd());
@@ -493,7 +248,7 @@ void PrmPathGenerator::sample_random_points(
     const double x = dist_x(gen);
     const double y = dist_y(gen);
 
-    if (!point_is_valid(x, y, arena, obstacles, clearance)) {
+    if (!CommonFunction::point_is_valid(x, y, arena, obstacles, clearance)) {
       continue;
     }
 
@@ -537,7 +292,7 @@ void planning_pkg::PrmPathGenerator::build_knn_edges(
 
     for (std::size_t j = 0; j < N; ++j) {
       if (i == j) continue;
-      dists.emplace_back(dist2(random_points[i], random_points[j]), static_cast<int>(j));
+      dists.emplace_back(CommonFunction::dist2(random_points[i], random_points[j]), static_cast<int>(j));
     }
 
     // seleziona i k vicini con distanza minore
@@ -550,7 +305,7 @@ void planning_pkg::PrmPathGenerator::build_knn_edges(
 
       // Per evitare duplicati, potresti imporre i<j qui e poi spingere su entrambi i lati.
       // Ma per semplicità controlliamo e aggiungiamo entrambe le direzioni se valido.
-      if (segment_is_valid(random_points[i], random_points[j],
+      if (CommonFunction::segment_is_valid(random_points[i], random_points[j],
                            arena, obstacles, clearance, sample_step))
       {
         knn_adj[i].push_back(j);

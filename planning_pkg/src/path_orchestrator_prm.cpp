@@ -25,14 +25,14 @@
 
 #include "planning_pkg/common.hpp"
 #include "planning_pkg/prm_path.hpp"
-
+#include "planning_pkg/visualizer_rviz.hpp"
 using rclcpp::QoS;
 using namespace std::chrono_literals;
 
 class PathPlanningOrchestratorClient : public rclcpp::Node
 {
 public:
-    PathPlanningOrchestratorClient() : Node("PathPlanningOrchestratorClient")
+    PathPlanningOrchestratorClient() : Node("PathPlanningOrchestratorClient") ,visualizer_(this)
     {
         const auto now = this->get_clock()->now();
         // QoS per subscriber
@@ -59,9 +59,6 @@ public:
         // Publisher
         pub_path_pos1_ = this->create_publisher<nav_msgs::msg::Path>("/path_pos1_to_gates", qos_pub);
         pub_path_pos2_ = this->create_publisher<nav_msgs::msg::Path>("/path_pos2_to_gates", qos_pub);
-
-        pub_random_points_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/prm_random_points", qos_markers);
-        pub_knn_edges_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("/prm_knn_edges", qos_markers);
 
         RCLCPP_INFO(this->get_logger(), "Orchestor client initialized!");
 
@@ -380,101 +377,14 @@ private:
         publish_path_with_retry(pub_path_pos2_, path2, "path pos2->gates");
 
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        publish_random_points_markers();
+        visualizer_.vis_random_points_markers(path_gen_.random_points);
 
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        publish_knn_edges_markers();
+        visualizer_.vis_knn_edges_markers(path_gen_.random_points, path_gen_.knn_adj);
 
         RCLCPP_INFO(this->get_logger(), "=== Path planning completed ===");
     }
 
-    // ===== Marker PLOT in RVIZ =====
-    void publish_random_points_markers()
-    {
-        visualization_msgs::msg::MarkerArray marker_array;
-
-        for (size_t i = 0; i < path_gen_.random_points.size(); ++i)
-        {
-            visualization_msgs::msg::Marker marker;
-            marker.header.frame_id = "map";
-            marker.header.stamp = this->get_clock()->now();
-            marker.ns = "prm_random_points";
-            marker.id = static_cast<int>(i);
-            marker.type = visualization_msgs::msg::Marker::SPHERE;
-            marker.action = visualization_msgs::msg::Marker::ADD;
-
-            marker.pose.position = path_gen_.random_points[i];
-            marker.pose.orientation.w = 1.0;
-
-            marker.scale.x = 0.1;
-            marker.scale.y = 0.1;
-            marker.scale.z = 0.1;
-
-            marker.color.r = 0.0;
-            marker.color.g = 1.0;
-            marker.color.b = 0.0;
-            marker.color.a = 0.8;
-
-            marker_array.markers.push_back(marker);
-        }
-
-        try
-        {
-            pub_random_points_->publish(marker_array);
-            RCLCPP_INFO(this->get_logger(), "Published %zu random points markers", marker_array.markers.size());
-        }
-        catch (const std::exception &e)
-        {
-            RCLCPP_WARN(this->get_logger(), "Failed to publish random points markers: %s", e.what());
-        }
-    }
-
-    void publish_knn_edges_markers()
-    {
-        visualization_msgs::msg::MarkerArray marker_array;
-
-        for (size_t i = 0; i < path_gen_.knn_adj.size(); ++i)
-        {
-            for (size_t j = 0; j < path_gen_.knn_adj[i].size(); ++j)
-            {
-                int neighbor_idx = path_gen_.knn_adj[i][j];
-
-                if (static_cast<int>(i) >= neighbor_idx)
-                    continue;
-
-                visualization_msgs::msg::Marker marker;
-                marker.header.frame_id = "map";
-                marker.header.stamp = this->get_clock()->now();
-                marker.ns = "prm_knn_edges";
-                marker.id = static_cast<int>(i * 1000 + j); // Unique ID
-                marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
-                marker.action = visualization_msgs::msg::Marker::ADD;
-
-                geometry_msgs::msg::Point start_point = path_gen_.random_points[i];
-                geometry_msgs::msg::Point end_point = path_gen_.random_points[neighbor_idx];
-
-                marker.points.push_back(start_point);
-                marker.points.push_back(end_point);
-
-                marker.scale.x = 0.02;
-                marker.color.r = 1.0;
-                marker.color.g = 0.0;
-                marker.color.b = 0.0;
-                marker.color.a = 0.6;
-                marker_array.markers.push_back(marker);
-            }
-        }
-
-        try
-        {
-            pub_knn_edges_->publish(marker_array);
-            RCLCPP_INFO(this->get_logger(), "Published %zu k-NN edge markers", marker_array.markers.size());
-        }
-        catch (const std::exception &e)
-        {
-            RCLCPP_WARN(this->get_logger(), "Failed to publish k-NN edges markers: %s", e.what());
-        }
-    }
 
     // ===== Member variables =====
     rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr client_re_mapping_trigger;
@@ -489,8 +399,6 @@ private:
 
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pub_path_pos1_;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pub_path_pos2_;
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_random_points_;
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_knn_edges_;
     obstacles_msgs::msg::ObstacleArrayMsg last_obstacles_;
     geometry_msgs::msg::Polygon last_arena_;
     geometry_msgs::msg::PoseArray last_gates_;
@@ -505,6 +413,7 @@ private:
     bool connections_ready_{false};
 
     planning_pkg::PrmPathGenerator path_gen_;
+    planning_pkg::VisualizationUtils visualizer_;
 };
 
 int main(int argc, char **argv)

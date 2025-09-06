@@ -88,6 +88,8 @@ add_executable(smooth_converter
 add_executable(path_orchestrator_prm 
   src/path_orchestrator_prm.cpp
   src/algo_path_planning/prm_path.cpp
+  src/utils/visualizer_rviz.cpp
+  src/algo_path_planning/common_function.cpp 
 )
 
 add_executable(path_orchestrator_comb

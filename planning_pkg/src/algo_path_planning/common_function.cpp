@@ -6,8 +6,8 @@
 namespace planning_pkg
 {
     void CommonFunction::compute_bbox(const geometry_msgs::msg::Polygon &poly,
-                                     double &minx, double &miny,
-                                     double &maxx, double &maxy)
+                                      double &minx, double &miny,
+                                      double &maxx, double &maxy)
     {
         if (poly.points.empty())
         {
@@ -51,8 +51,8 @@ namespace planning_pkg
     inline double sqr(double v) { return v * v; }
 
     double CommonFunction::point_to_segment_distance(double px, double py,
-                                                    double ax, double ay,
-                                                    double bx, double by)
+                                                     double ax, double ay,
+                                                     double bx, double by)
     {
         const double vx = bx - ax;
         const double vy = by - ay;
@@ -77,7 +77,7 @@ namespace planning_pkg
     }
 
     double CommonFunction::distance_to_polygon_edges(const geometry_msgs::msg::Polygon &poly,
-                                                    double x, double y)
+                                                     double x, double y)
     {
         const auto n = poly.points.size();
         if (n < 2)
@@ -100,9 +100,9 @@ namespace planning_pkg
 
     // Controllo validità con clearance rispetto ad arena e ostacoli
     bool CommonFunction::point_is_valid(double x, double y,
-                                       const geometry_msgs::msg::Polygon &arena,
-                                       const obstacles_msgs::msg::ObstacleArrayMsg &obstacles,
-                                       double clearance)
+                                        const geometry_msgs::msg::Polygon &arena,
+                                        const obstacles_msgs::msg::ObstacleArrayMsg &obstacles,
+                                        double clearance)
     {
         // dentro l'arena
         if (!point_in_polygon(arena, x, y))
@@ -157,7 +157,7 @@ namespace planning_pkg
     }
 
     double CommonFunction::dist2(const geometry_msgs::msg::Point &a,
-                                const geometry_msgs::msg::Point &b)
+                                 const geometry_msgs::msg::Point &b)
     {
         const double dx = static_cast<double>(a.x) - static_cast<double>(b.x);
         const double dy = static_cast<double>(a.y) - static_cast<double>(b.y);
@@ -204,12 +204,13 @@ namespace planning_pkg
         }
         return intersections;
     }
-      bool CommonFunction::segment_is_valid(const geometry_msgs::msg::Point &a,
-                                         const geometry_msgs::msg::Point &b,
-                                         const geometry_msgs::msg::Polygon &arena,
-                                         const obstacles_msgs::msg::ObstacleArrayMsg &obstacles,
-                                         double clearance,
-                                         double sample_step)
+
+    bool CommonFunction::segment_is_valid(const geometry_msgs::msg::Point &a,
+                                          const geometry_msgs::msg::Point &b,
+                                          const geometry_msgs::msg::Polygon &arena,
+                                          const obstacles_msgs::msg::ObstacleArrayMsg &obstacles,
+                                          double clearance,
+                                          double sample_step)
     {
         // Clamp passo
         if (sample_step < 0.01)
@@ -232,7 +233,6 @@ namespace planning_pkg
         }
         return true;
     }
-
 
     std::vector<geometry_msgs::msg::Point> CommonFunction::optimize_path_with_raycasting(
         const std::vector<geometry_msgs::msg::Point> &original_path,
