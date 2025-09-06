@@ -25,14 +25,14 @@
 
 #include "planning_pkg/common.hpp"
 #include "planning_pkg/comb_path.hpp"
-
+#include "planning_pkg/visualizer_rviz.hpp"
 using rclcpp::QoS;
 using namespace std::chrono_literals;
 
 class PathPlanningOrchestratorClient : public rclcpp::Node
 {
 public:
-    PathPlanningOrchestratorClient() : Node("PathPlanningOrchestratorClient")
+    PathPlanningOrchestratorClient() : Node("PathPlanningOrchestratorClient"),visualizer_(this)
     {
         const auto now = this->get_clock()->now();
 
@@ -59,14 +59,10 @@ public:
         pub_path_pos1_ = this->create_publisher<nav_msgs::msg::Path>("/path_pos1_to_gates", qos_pub);
         pub_path_pos2_ = this->create_publisher<nav_msgs::msg::Path>("/path_pos2_to_gates", qos_pub);
 
-        pub_vertical_line = this->create_publisher<visualization_msgs::msg::MarkerArray>("/vertical_line", qos_markers);
-        pub_points_markers = this->create_publisher<visualization_msgs::msg::MarkerArray>("/pointlist_markers", qos_markers);
-        pub_cells_markers = this->create_publisher<visualization_msgs::msg::MarkerArray>("/cells_markers", qos_markers);
-        pub_arcs_markers = this->create_publisher<visualization_msgs::msg::MarkerArray>("/arcs_markers", qos_markers);
         connection_timer_ = this->create_wall_timer(2s, std::bind(&PathPlanningOrchestratorClient::on_connection_ready_, this));
         init_timer_ = this->create_wall_timer(3s, std::bind(&PathPlanningOrchestratorClient::init_service_call_, this));
         
-        path_gen_ = planning_pkg::CombPathGenerator("map", 0.1);        
+        path_gen_ = planning_pkg::CombPathGenerator("map", 0.1);
         connections_ready_ = false;
 
         RCLCPP_INFO(this->get_logger(), "Orchestor Ready- waiting for connections...");
@@ -319,24 +315,24 @@ private:
         wps_pos2.emplace_back(p2.x, p2.y);
         wps_pos2.emplace_back(nearest_gate_pos2.first, nearest_gate_pos2.second);
 
-
-        // ===== GENERAZIONE PATH PER ROBOT 1 =====
-        // Genera le linee orizzontali usando CombPathGenerator
-        std::vector<planning_pkg::HorizontalLine> horizontal_lines = path_gen_.get_horizontal_lines(last_obstacles_, last_arena_);
-
-        // Ottieni anche i punti per la visualizzazione
-        std::vector<std::pair<double, double>> points = path_gen_.get_pointlist(last_obstacles_, last_arena_);
+        // ===== visuallizer part =====
         std::vector<std::pair<double, double>> points_line;
         std::vector<std::pair<double, double>> points_centroids;
+        std::vector<std::pair<double, double>> points = path_gen_.get_pointlist(last_obstacles_, last_arena_);
+        std::vector<planning_pkg::HorizontalLine> horizontal_lines = path_gen_.get_horizontal_lines(last_obstacles_, last_arena_);
 
-        // Ciclo per usare set_point_in_vertical_line
         for (const auto &line : horizontal_lines)
         {
             auto line_points = path_gen_.set_point_in_vertical_line(line, 1.0);
             points_line.insert(points_line.end(), line_points.begin(), line_points.end());
         }
-
-        // Memorizza i dati per la visualizzazione
+        std::vector<planning_pkg::Cell> cells = path_gen_.get_cells_btw_vlines(horizontal_lines);
+        for (const auto &cell : cells)
+        {
+            auto centroid = path_gen_.get_cell_centroid(cell);
+            points_centroids.push_back(centroid);
+        }
+        std::vector<std::vector<int>> arc_list = path_gen_.get_arc(horizontal_lines, points_line, points_centroids);
         vertical_lines_data_.clear();
         for (const auto &line : horizontal_lines)
         {
@@ -346,71 +342,45 @@ private:
                 std::make_pair(line.x_start, line.y),
                 std::make_pair(line.x_end, line.y));
         }
+        
+        visualizer_.vis_points(points_centroids); // "points_centroids" or "points_line" or "points"
+        visualizer_.vis_line();
+        visualizer_.vis_cells(cells);
+        visualizer_.vis_arcs(arc_list, points_line, points_centroids);
 
-        // Ottieni i centroidi delle celle
-        std::vector<planning_pkg::Cell> cells = path_gen_.get_cells_btw_vlines(horizontal_lines);
-        for (const auto &cell : cells)
-        {
-            auto centroid = path_gen_.get_cell_centroid(cell);
-            points_centroids.push_back(centroid);
-        }
-
-        // Visualizzazione
-        vis_points(points_centroids);
-        vis_line();
-        vis_cells(cells);
-
-        std::vector<std::vector<int>> arc_list = path_gen_.get_arc(horizontal_lines, points_line, points_centroids);
-        vis_arcs(arc_list, points_line, points_centroids);
-
-        RCLCPP_INFO(this->get_logger(), "Generated %zu points and %zu horizontal lines", points.size(), horizontal_lines.size());
-
-        // ===== GENERAZIONE PATH PER ROBOT 1 =====
-        RCLCPP_INFO(this->get_logger(), "Generating path for Robot 1...");
+        // ===== generation path =====
+        RCLCPP_INFO(this->get_logger(), "Generating path for Robot 1 and 2...");
         nav_msgs::msg::Path path1;
-        try
-        {
-            path1 = path_gen_.generate(wps_pos1, last_obstacles_, last_arena_);
-
-            if (!path1.poses.empty())
-            {
-                RCLCPP_INFO(this->get_logger(), "Path generato per Robot 1: %zu waypoints", path1.poses.size());
-            }
-            else
-            {
-                RCLCPP_ERROR(this->get_logger(), "Nessun path trovato per Robot 1");
-            }
-        }
-        catch (const std::exception &e)
-        {
-            RCLCPP_ERROR(this->get_logger(), "Errore nella generazione del path per Robot 1: %s", e.what());
-            path1 = nav_msgs::msg::Path(); // Path vuoto
-            path1.header.frame_id = "map";
-            path1.header.stamp = this->get_clock()->now();
-        }
-
-        // ===== GENERAZIONE PATH PER ROBOT 2 =====
-        RCLCPP_INFO(this->get_logger(), "Generating path for Robot 2...");
         nav_msgs::msg::Path path2;
         try
         {
+            path1 = path_gen_.generate(wps_pos1, last_obstacles_, last_arena_);
             path2 = path_gen_.generate(wps_pos2, last_obstacles_, last_arena_);
+            if (!path1.poses.empty())
+            {
+                RCLCPP_INFO(this->get_logger(), "Path generate for Robot 1: %zu waypoints", path1.poses.size());
+            }
 
             if (!path2.poses.empty())
             {
-                RCLCPP_INFO(this->get_logger(), "Path generato per Robot 2: %zu waypoints", path2.poses.size());
+                RCLCPP_INFO(this->get_logger(), "Path generate for Robot 2: %zu waypoints", path2.poses.size());
             }
-            else
+            else if (path1.poses.empty())
             {
-                RCLCPP_ERROR(this->get_logger(), "Nessun path trovato per Robot 2");
+                RCLCPP_ERROR(this->get_logger(), "NO path for Robot 1");
+            }
+            else if (path2.poses.empty())
+            {
+                RCLCPP_ERROR(this->get_logger(), "NO path for Robot 2");
             }
         }
+
         catch (const std::exception &e)
         {
-            RCLCPP_ERROR(this->get_logger(), "Errore nella generazione del path per Robot 2: %s", e.what());
-            path2 = nav_msgs::msg::Path(); // Path vuoto
-            path2.header.frame_id = "map";
-            path2.header.stamp = this->get_clock()->now();
+            RCLCPP_ERROR(this->get_logger(), "Error to generate the path for robots: %s", e.what());
+            path1 = nav_msgs::msg::Path(); // Path vuoto
+            path1.header.frame_id = "map";
+            path1.header.stamp = this->get_clock()->now();
         }
 
         // Verifica connessioni prima di pubblicare (con timeout breve)
@@ -430,293 +400,11 @@ private:
 
         RCLCPP_INFO(this->get_logger(), "=== Path planning completed ===");
     }
-
-    // ===== Visualization methods =====
-    void vis_points(const std::vector<std::pair<double, double>> &points)
-    {
-        if (points.empty())
-        {
-            RCLCPP_WARN(this->get_logger(), "No points to visualize");
-            return;
-        }
-
-        visualization_msgs::msg::MarkerArray marker_array;
-
-        for (size_t i = 0; i < points.size(); ++i)
-        {
-            const auto &point = points[i];
-
-            visualization_msgs::msg::Marker point_marker;
-            point_marker.header.frame_id = "map";
-            point_marker.header.stamp = this->get_clock()->now();
-            point_marker.ns = "pointlist_markers";
-            point_marker.id = static_cast<int>(i);
-            point_marker.type = visualization_msgs::msg::Marker::SPHERE;
-            point_marker.action = visualization_msgs::msg::Marker::ADD;
-
-            // Posizione del punto
-            point_marker.pose.position.x = point.first;
-            point_marker.pose.position.y = point.second;
-            point_marker.pose.position.z = 0.1; // Leggermente sopra il piano per visibilità
-            point_marker.pose.orientation.x = 0.0;
-            point_marker.pose.orientation.y = 0.0;
-            point_marker.pose.orientation.z = 0.0;
-            point_marker.pose.orientation.w = 1.0;
-
-            // Scala del marker (dimensione della sfera)
-            point_marker.scale.x = 0.15;
-            point_marker.scale.y = 0.15;
-            point_marker.scale.z = 0.15;
-
-            // Colore del marker (rosso)
-            point_marker.color.r = 1.0;
-            point_marker.color.g = 0.0;
-            point_marker.color.b = 0.0;
-            point_marker.color.a = 0.8; // trasparenza
-
-            // Durata del marker
-            point_marker.lifetime = rclcpp::Duration::from_seconds(0); // persistente
-
-            marker_array.markers.push_back(point_marker);
-        }
-
-        // Pubblica il marker array
-        pub_points_markers->publish(marker_array);
-
-        RCLCPP_INFO(this->get_logger(), "Published %zu point markers for visualization",
-                    marker_array.markers.size());
-    }
-    void vis_cells(const std::vector<planning_pkg::Cell> &cells)
-    {
-        if (cells.empty())
-        {
-            RCLCPP_WARN(this->get_logger(), "No cells to visualize");
-            return;
-        }
-
-        visualization_msgs::msg::MarkerArray marker_array;
-
-        for (size_t i = 0; i < cells.size(); ++i)
-        {
-            const auto &cell = cells[i];
-
-            visualization_msgs::msg::Marker cell_marker;
-            cell_marker.header.frame_id = "map";
-            cell_marker.header.stamp = this->get_clock()->now();
-            cell_marker.ns = "cells_markers";
-            cell_marker.id = static_cast<int>(i);
-            cell_marker.type = visualization_msgs::msg::Marker::CUBE;
-            cell_marker.action = visualization_msgs::msg::Marker::ADD;
-
-            // Posizione del centro della cella
-            cell_marker.pose.position.x = cell.center_x;
-            cell_marker.pose.position.y = cell.center_y;
-            cell_marker.pose.position.z = 0.05; // Leggermente sopra il piano
-            cell_marker.pose.orientation.x = 0.0;
-            cell_marker.pose.orientation.y = 0.0;
-            cell_marker.pose.orientation.z = 0.0;
-            cell_marker.pose.orientation.w = 1.0;
-
-            // Scala del marker (dimensioni della cella)
-            cell_marker.scale.x = cell.width;
-            cell_marker.scale.y = cell.height;
-            cell_marker.scale.z = 0.1; // Altezza sottile per visualizzazione 2D
-
-            // Colore del marker (blu trasparente)
-            cell_marker.color.r = 0.0;
-            cell_marker.color.g = 0.0;
-            cell_marker.color.b = 1.0;
-            cell_marker.color.a = 0.3; // Molto trasparente per vedere attraverso
-
-            // Durata del marker
-            cell_marker.lifetime = rclcpp::Duration::from_seconds(0); // persistente
-
-            marker_array.markers.push_back(cell_marker);
-        }
-
-        // Pubblica il marker array
-        pub_cells_markers->publish(marker_array);
-
-        RCLCPP_INFO(this->get_logger(), "Published %zu cell markers for visualization",
-                    marker_array.markers.size());
-    }
-    void vis_line()
-    {
-        if (vertical_lines_data_.empty())
-        {
-            RCLCPP_WARN(this->get_logger(), "No lines to visualize");
-            return;
-        }
-
-        visualization_msgs::msg::MarkerArray marker_array;
-
-        for (size_t i = 0; i < vertical_lines_data_.size(); ++i)
-        {
-            const auto &line_data = vertical_lines_data_[i];
-
-            visualization_msgs::msg::Marker line_marker;
-            line_marker.header.frame_id = "map";
-            line_marker.header.stamp = this->get_clock()->now();
-            line_marker.ns = "horizontal_lines";
-            line_marker.id = static_cast<int>(i);
-            line_marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
-            line_marker.action = visualization_msgs::msg::Marker::ADD;
-
-            // Posizione e orientamento
-            line_marker.pose.position.x = 0.0;
-            line_marker.pose.position.y = 0.0;
-            line_marker.pose.position.z = 0.0;
-            line_marker.pose.orientation.x = 0.0;
-            line_marker.pose.orientation.y = 0.0;
-            line_marker.pose.orientation.z = 0.0;
-            line_marker.pose.orientation.w = 1.0;
-
-            // Scala e colore
-            line_marker.scale.x = 0.05; // spessore della linea
-            line_marker.color.r = 0.0;
-            line_marker.color.g = 1.0; // verde
-            line_marker.color.b = 0.0;
-            line_marker.color.a = 0.8; // trasparenza
-
-            // Punti della linea
-            geometry_msgs::msg::Point start_point;
-            start_point.x = std::get<2>(line_data).first;  // x_start
-            start_point.y = std::get<2>(line_data).second; // y (uguale per entrambi i punti)
-            start_point.z = std::get<1>(line_data);        // z coordinate
-
-            geometry_msgs::msg::Point end_point;
-            end_point.x = std::get<3>(line_data).first;  // x_end
-            end_point.y = std::get<3>(line_data).second; // y (uguale per entrambi i punti)
-            end_point.z = std::get<1>(line_data);        // z coordinate
-
-            line_marker.points.push_back(start_point);
-            line_marker.points.push_back(end_point);
-
-            marker_array.markers.push_back(line_marker);
-        }
-
-        // Pubblica il marker array
-        pub_vertical_line->publish(marker_array);
-
-        RCLCPP_INFO(this->get_logger(), "Published %zu line markers for visualization",
-                    marker_array.markers.size());
-    }
-    void vis_arcs(const std::vector<std::vector<int>> &arc_list,
-                  const std::vector<std::pair<double, double>> &points_line,
-                  const std::vector<std::pair<double, double>> &points_centroids)
-    {
-        if (arc_list.empty())
-        {
-            RCLCPP_WARN(this->get_logger(), "No arcs to visualize");
-            return;
-        }
-
-        visualization_msgs::msg::MarkerArray marker_array;
-
-        // Combina tutti i punti in un unico vettore per l'indicizzazione
-        std::vector<std::pair<double, double>> all_points;
-        all_points.insert(all_points.end(), points_line.begin(), points_line.end());
-        all_points.insert(all_points.end(), points_centroids.begin(), points_centroids.end());
-
-        int marker_id = 0;
-
-        // Per ogni nodo nel grafo
-        for (size_t i = 0; i < arc_list.size(); ++i)
-        {
-            if (i >= all_points.size())
-                continue; // Controllo di sicurezza
-
-            const auto &connections = arc_list[i];
-            const auto &start_point = all_points[i];
-
-            // Per ogni connessione di questo nodo
-            for (int connected_node : connections)
-            {
-                if (connected_node >= static_cast<int>(all_points.size()) || connected_node < 0)
-                    continue; // Controllo di sicurezza
-
-                const auto &end_point = all_points[connected_node];
-
-                // Crea un marker per l'arco
-                visualization_msgs::msg::Marker arc_marker;
-                arc_marker.header.frame_id = "map";
-                arc_marker.header.stamp = this->get_clock()->now();
-                arc_marker.ns = "graph_arcs";
-                arc_marker.id = marker_id++;
-                arc_marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
-                arc_marker.action = visualization_msgs::msg::Marker::ADD;
-
-                // Posizione e orientamento
-                arc_marker.pose.position.x = 0.0;
-                arc_marker.pose.position.y = 0.0;
-                arc_marker.pose.position.z = 0.0;
-                arc_marker.pose.orientation.x = 0.0;
-                arc_marker.pose.orientation.y = 0.0;
-                arc_marker.pose.orientation.z = 0.0;
-                arc_marker.pose.orientation.w = 1.0;
-
-                // Stile della linea
-                arc_marker.scale.x = 0.02; // Spessore della linea (più sottile delle linee orizzontali)
-
-                // Colore diverso per i diversi tipi di connessioni
-                if (i < points_line.size() && connected_node >= static_cast<int>(points_line.size()))
-                {
-                    // Connessione da punto a centroide (rosso)
-                    arc_marker.color.r = 1.0;
-                    arc_marker.color.g = 0.0;
-                    arc_marker.color.b = 0.0;
-                    arc_marker.color.a = 0.6;
-                }
-                else if (i >= points_line.size() && connected_node < static_cast<int>(points_line.size()))
-                {
-                    // Connessione da centroide a punto (arancione)
-                    arc_marker.color.r = 1.0;
-                    arc_marker.color.g = 0.5;
-                    arc_marker.color.b = 0.0;
-                    arc_marker.color.a = 0.6;
-                }
-                else
-                {
-                    // Altri tipi di connessioni (viola)
-                    arc_marker.color.r = 0.5;
-                    arc_marker.color.g = 0.0;
-                    arc_marker.color.b = 1.0;
-                    arc_marker.color.a = 0.6;
-                }
-
-                // Punti della linea
-                geometry_msgs::msg::Point start_geom_point;
-                start_geom_point.x = start_point.first;
-                start_geom_point.y = start_point.second;
-                start_geom_point.z = 0.05; // Leggermente sopra il piano
-
-                geometry_msgs::msg::Point end_geom_point;
-                end_geom_point.x = end_point.first;
-                end_geom_point.y = end_point.second;
-                end_geom_point.z = 0.05; // Leggermente sopra il piano
-
-                arc_marker.points.push_back(start_geom_point);
-                arc_marker.points.push_back(end_geom_point);
-
-                // Durata del marker
-                arc_marker.lifetime = rclcpp::Duration::from_seconds(0); // persistente
-
-                marker_array.markers.push_back(arc_marker);
-            }
-        }
-
-        // Pubblica il marker array
-        pub_arcs_markers->publish(marker_array);
-
-        RCLCPP_INFO(this->get_logger(), "Published %d arc markers for visualization", marker_id);
-    }
-    // Supporta elementi dei tipi: geometry_msgs::msg::Point, geometry_msgs::msg::Pose, std::pair<double,double>
     static std::pair<double, double> xy_from_(const geometry_msgs::msg::Point &p) { return {p.x, p.y}; }
     static std::pair<double, double> xy_from_(const geometry_msgs::msg::Pose &p) { return {p.position.x, p.position.y}; }
     template <typename A, typename B>
     static std::pair<double, double> xy_from_(const std::pair<A, B> &p) { return {static_cast<double>(p.first), static_cast<double>(p.second)}; }
-
-    // ===== Member variables =====
+    // ===== Members =====
     rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr client_re_mapping_trigger;
     rclcpp::TimerBase::SharedPtr init_timer_;
     rclcpp::TimerBase::SharedPtr connection_timer_;
@@ -729,11 +417,6 @@ private:
 
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pub_path_pos1_;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pub_path_pos2_;
-
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_vertical_line;
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_points_markers;
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_cells_markers;
-    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_arcs_markers;
 
     obstacles_msgs::msg::ObstacleArrayMsg last_obstacles_;
     geometry_msgs::msg::Polygon last_arena_;
@@ -749,6 +432,7 @@ private:
     bool connections_ready_{false};
 
     planning_pkg::CombPathGenerator path_gen_;
+    planning_pkg::VisualizationUtils visualizer_;
     std::vector<std::tuple<double, double, std::pair<double, double>, std::pair<double, double>>> vertical_lines_data_;
 };
 

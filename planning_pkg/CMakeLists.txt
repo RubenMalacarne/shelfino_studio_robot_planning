@@ -68,6 +68,9 @@ add_executable(main_base
   src/main_base.cpp
 )
 
+add_library(visualizer_rviz
+  src/utils/visualizer_rviz.cpp
+)
 add_executable(re_mapping
   src/utils/re_mapping.cpp
 )
@@ -90,6 +93,8 @@ add_executable(path_orchestrator_prm
 add_executable(path_orchestrator_comb
   src/path_orchestrator_comb.cpp
   src/algo_path_planning/comb_path.cpp
+  src/utils/visualizer_rviz.cpp
+  src/algo_path_planning/common_function.cpp 
 )
 
 ament_target_dependencies(linear_path
@@ -184,6 +189,14 @@ ament_target_dependencies(smooth_converter
   std_srvs
 )
 
+ament_target_dependencies(visualizer_rviz
+  rclcpp
+  geometry_msgs
+  visualization_msgs
+  nav_msgs 
+  obstacles_msgs
+)
+
 target_include_directories(main_base PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(re_mapping PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(nav2_pathclient PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -193,7 +206,7 @@ target_include_directories(linear_path PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/includ
 target_include_directories(comb_path PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(smooth_converter PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(prm_path PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-
+target_include_directories(visualizer_rviz PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 
 install(TARGETS
