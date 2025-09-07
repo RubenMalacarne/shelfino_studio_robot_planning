@@ -3,9 +3,9 @@
 #include <vector>
 #include <string>
 #include <cmath>
-#include <utility>   // std::pair
-#include <algorithm> // std::max
-#include <thread>    // std::this_thread
+#include <utility>  
+#include <algorithm>
+#include <thread>   
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_srvs/srv/trigger.hpp"
@@ -25,6 +25,7 @@
 
 #include "planning_pkg/common.hpp"
 #include "planning_pkg/comb_path.hpp"
+#include "planning_pkg/linear_path.hpp"
 #include "planning_pkg/visualizer_rviz.hpp"
 using rclcpp::QoS;
 using namespace std::chrono_literals;
@@ -32,13 +33,12 @@ using namespace std::chrono_literals;
 class PathPlanningOrchestratorClient : public rclcpp::Node
 {
 public:
-    PathPlanningOrchestratorClient() : Node("PathPlanningOrchestratorClient"),visualizer_(this)
+    PathPlanningOrchestratorClient() : Node("PathPlanningOrchestratorClient"), visualizer_(this)
     {
         const auto now = this->get_clock()->now();
 
-        // QoS for subscribers / markers / publishers
+        // QoS for subscribers / publishers
         const auto qos_sub = rclcpp::QoS(rclcpp::KeepLast(1), planning_pkg::qos::qos_profile_custom1);
-        const auto qos_markers = rclcpp::QoS(rclcpp::KeepLast(10), planning_pkg::qos::qos_profile_markers);
         const auto qos_pub = rclcpp::QoS(rclcpp::KeepLast(10), planning_pkg::qos::qos_profile_publishers);
 
         // Subscriber
@@ -61,8 +61,9 @@ public:
 
         connection_timer_ = this->create_wall_timer(2s, std::bind(&PathPlanningOrchestratorClient::on_connection_ready_, this));
         init_timer_ = this->create_wall_timer(3s, std::bind(&PathPlanningOrchestratorClient::init_service_call_, this));
-        
+
         path_gen_ = planning_pkg::CombPathGenerator("map", 0.1);
+        linear_gen_ = planning_pkg::LinearPathGenerator("map", 0.1);
         connections_ready_ = false;
 
         RCLCPP_INFO(this->get_logger(), "Orchestor Ready- waiting for connections...");
@@ -315,6 +316,23 @@ private:
         wps_pos2.emplace_back(p2.x, p2.y);
         wps_pos2.emplace_back(nearest_gate_pos2.first, nearest_gate_pos2.second);
 
+        nav_msgs::msg::Path path1;
+        nav_msgs::msg::Path path2;
+
+        // check if the path is a straight line (no obstacles in between)
+        bool is_linear_1 = linear_gen_.is_direct_path_feasible(wps_pos1.front(), wps_pos1.back(), last_obstacles_, last_arena_);
+        bool is_linear_2 = linear_gen_.is_direct_path_feasible(wps_pos2.front(), wps_pos2.back(), last_obstacles_, last_arena_);
+        if (is_linear_1)
+        {
+            RCLCPP_INFO(this->get_logger(), "Direct path feasible for Robot 1, using linear path generator.");
+            path1 = linear_gen_.generate(wps_pos1, last_obstacles_, last_arena_);
+        }
+        if (is_linear_2)
+        {
+            RCLCPP_INFO(this->get_logger(), "Direct path feasible for Robot 2,using linear path generator.");
+            path2 = linear_gen_.generate(wps_pos2, last_obstacles_, last_arena_);
+        }
+
         // ===== visuallizer part =====
         std::vector<std::pair<double, double>> points_line;
         std::vector<std::pair<double, double>> points_centroids;
@@ -342,7 +360,7 @@ private:
                 std::make_pair(line.x_start, line.y),
                 std::make_pair(line.x_end, line.y));
         }
-        
+
         visualizer_.vis_points(points_centroids); // "points_centroids" or "points_line" or "points"
         visualizer_.vis_line();
         visualizer_.vis_cells(cells);
@@ -350,12 +368,16 @@ private:
 
         // ===== generation path =====
         RCLCPP_INFO(this->get_logger(), "Generating path for Robot 1 and 2...");
-        nav_msgs::msg::Path path1;
-        nav_msgs::msg::Path path2;
         try
         {
-            path1 = path_gen_.generate(wps_pos1, last_obstacles_, last_arena_);
-            path2 = path_gen_.generate(wps_pos2, last_obstacles_, last_arena_);
+            if (!is_linear_1)
+            {
+                path1 = path_gen_.generate(wps_pos1, last_obstacles_, last_arena_);
+            }
+            if (!is_linear_2)
+            {
+                path2 = path_gen_.generate(wps_pos2, last_obstacles_, last_arena_);
+            }
             if (!path1.poses.empty())
             {
                 RCLCPP_INFO(this->get_logger(), "Path generate for Robot 1: %zu waypoints", path1.poses.size());
@@ -432,6 +454,7 @@ private:
     bool connections_ready_{false};
 
     planning_pkg::CombPathGenerator path_gen_;
+    planning_pkg::LinearPathGenerator linear_gen_;
     planning_pkg::VisualizationUtils visualizer_;
     std::vector<std::tuple<double, double, std::pair<double, double>, std::pair<double, double>>> vertical_lines_data_;
 };

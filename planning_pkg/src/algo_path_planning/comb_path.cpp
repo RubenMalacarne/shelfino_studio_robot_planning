@@ -44,7 +44,6 @@ namespace planning_pkg
         const auto start = waypoints.front();
         const auto goal = waypoints.back();
 
-        // Verifica che start e goal siano validi
         if (!CommonFunction::point_is_valid(start.first, start.second, arena, obstacles, 0.15))
         {
             RCLCPP_ERROR(rclcpp::get_logger("comb_path_generator"),
@@ -59,6 +58,17 @@ namespace planning_pkg
             return path;
         }
 
+        // 0. inizializza start e goal al grafo temporaneo
+        geometry_msgs::msg::Point start_point;
+        start_point.x = start.first;
+        start_point.y = start.second;
+        start_point.z = 0.0;
+
+        geometry_msgs::msg::Point goal_point;
+        goal_point.x = goal.first;
+        goal_point.y = goal.second;
+        goal_point.z = 0.0;
+        
         // 1. Genera la lista di punti (vertici di ostacoli e arena)
         std::vector<std::pair<double, double>> pointslist = get_pointlist(obstacles, arena);
 
@@ -115,16 +125,6 @@ namespace planning_pkg
             temp_points.push_back(p);
         }
 
-        // 7. Aggiungi start e goal al grafo temporaneo
-        geometry_msgs::msg::Point start_point;
-        start_point.x = start.first;
-        start_point.y = start.second;
-        start_point.z = 0.0;
-
-        geometry_msgs::msg::Point goal_point;
-        goal_point.x = goal.first;
-        goal_point.y = goal.second;
-        goal_point.z = 0.0;
 
         temp_points.push_back(start_point);
         temp_points.push_back(goal_point);

@@ -3,9 +3,9 @@
 #include <vector>
 #include <string>
 #include <cmath>
-#include <utility>   // std::pair
-#include <algorithm> // std::max
-#include <thread>    // std::this_thread
+#include <utility>   
+#include <algorithm> 
+#include <thread>    
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_srvs/srv/trigger.hpp"
@@ -25,21 +25,21 @@
 
 #include "planning_pkg/common.hpp"
 #include "planning_pkg/prm_path.hpp"
+#include "planning_pkg/linear_path.hpp"
 #include "planning_pkg/visualizer_rviz.hpp"
+#include "planning_pkg/linear_path.hpp"
 using rclcpp::QoS;
 using namespace std::chrono_literals;
 
 class PathPlanningOrchestratorClient : public rclcpp::Node
 {
 public:
-    PathPlanningOrchestratorClient() : Node("PathPlanningOrchestratorClient") ,visualizer_(this)
+    PathPlanningOrchestratorClient() : Node("PathPlanningOrchestratorClient"), visualizer_(this)
     {
         const auto now = this->get_clock()->now();
-        // QoS per subscriber
+
+        // QoS per subscriber / publisher
         const auto qos_sub = rclcpp::QoS(rclcpp::KeepLast(1), planning_pkg::qos::qos_profile_custom1);
-        // QoS per marker di visualizzazione
-        const auto qos_markers = rclcpp::QoS(rclcpp::KeepLast(10), planning_pkg::qos::qos_profile_markers);
-        // QoS migliorata per publisher
         const auto qos_pub = rclcpp::QoS(rclcpp::KeepLast(10), planning_pkg::qos::qos_profile_publishers);
 
         // Subscriber
@@ -60,17 +60,15 @@ public:
         pub_path_pos1_ = this->create_publisher<nav_msgs::msg::Path>("/path_pos1_to_gates", qos_pub);
         pub_path_pos2_ = this->create_publisher<nav_msgs::msg::Path>("/path_pos2_to_gates", qos_pub);
 
-        RCLCPP_INFO(this->get_logger(), "Orchestor client initialized!");
-
         connection_timer_ = this->create_wall_timer(2s, std::bind(&PathPlanningOrchestratorClient::on_connection_ready_, this));
         init_timer_ = this->create_wall_timer(3s, std::bind(&PathPlanningOrchestratorClient::init_service_call_, this));
 
         RCLCPP_INFO(this->get_logger(), "Orchestor - waiting for connections...");
-        // path planning initialization
         path_gen_ = planning_pkg::PrmPathGenerator("map", 0.1);
-
-        // Flag per tracciare se le connessioni sono pronte
+        linear_gen_ = planning_pkg::LinearPathGenerator("map", 0.1);
         connections_ready_ = false;
+
+        RCLCPP_INFO(this->get_logger(), "Orchestor Ready- waiting for connections...");
     }
 
     void call_service()
@@ -279,7 +277,7 @@ private:
         {
             const double dx = g.position.x - pos.x;
             const double dy = g.position.y - pos.y;
-            const double dist_sq = dx * dx + dy * dy; 
+            const double dist_sq = dx * dx + dy * dy;
 
             if (dist_sq < min_dist_sq)
             {
@@ -288,30 +286,6 @@ private:
             }
         }
         return nearest_gate_pos;
-    }
-
-    // Convert Dijkstra path indices to nav_msgs::msg::Path
-    nav_msgs::msg::Path indices_to_nav_path(const std::vector<int> &path_indices)
-    {
-        nav_msgs::msg::Path path;
-        path.header.frame_id = "map";
-        path.header.stamp = this->get_clock()->now();
-
-        for (int idx : path_indices)
-        {
-            if (idx >= 0 && static_cast<size_t>(idx) < path_gen_.random_points.size())
-            {
-                geometry_msgs::msg::PoseStamped pose_stamped;
-                pose_stamped.header = path.header;
-
-                pose_stamped.pose.position = path_gen_.random_points[idx];
-                pose_stamped.pose.orientation.w = 1.0; // Default orientation
-
-                path.poses.push_back(pose_stamped);
-            }
-        }
-
-        return path;
     }
 
     void path_planning()
@@ -351,18 +325,44 @@ private:
         wps_pos2.emplace_back(nearest_gate_pos2.first, nearest_gate_pos2.second);
         // step:
 
-        // 1) Sample random points for PRM
-        RCLCPP_INFO(this->get_logger(), "Sampling random points...");
-        path_gen_.sample_random_points(last_obstacles_, last_arena_, 100);
+        nav_msgs::msg::Path path1;
+        nav_msgs::msg::Path path2;
 
-        // 2) Build k-NN edges
-        RCLCPP_INFO(this->get_logger(), "Building k-NN edges...");
-        path_gen_.build_knn_edges(last_obstacles_, last_arena_, 7, 0.15, 0.1);
+        // check if the path is a straight line (no obstacles in between)
+        bool is_linear_1 = linear_gen_.is_direct_path_feasible(wps_pos1.front(), wps_pos1.back(), last_obstacles_, last_arena_);
+        bool is_linear_2 = linear_gen_.is_direct_path_feasible(wps_pos2.front(), wps_pos2.back(), last_obstacles_, last_arena_);
+        if (is_linear_1)
+        {
+            RCLCPP_INFO(this->get_logger(), "Direct path feasible for Robot 1, using linear path generator.");
+            path1 = linear_gen_.generate(wps_pos1, last_obstacles_, last_arena_);
+        }
+        if (is_linear_2)
+        {
+            RCLCPP_INFO(this->get_logger(), "Direct path feasible for Robot 2,using linear path generator.");
+            path2 = linear_gen_.generate(wps_pos2, last_obstacles_, last_arena_);
+        }
+
+        if (!is_linear_1 || !is_linear_2)
+        {
+            // 1) Sample random points for PRM
+            RCLCPP_INFO(this->get_logger(), "Sampling random points...");
+            path_gen_.sample_random_points(last_obstacles_, last_arena_, 100);
+
+            // 2) Build k-NN edges
+            RCLCPP_INFO(this->get_logger(), "Building k-NN edges...");
+            path_gen_.build_knn_edges(last_obstacles_, last_arena_, 7, 0.15, 0.1);
+        }
 
         // 3) Genera path con step di 0.1 m e frame "map"
         RCLCPP_INFO(this->get_logger(), "Generating paths...");
-        nav_msgs::msg::Path path1 = path_gen_.generate(wps_pos1, last_obstacles_, last_arena_);
-        nav_msgs::msg::Path path2 = path_gen_.generate(wps_pos2, last_obstacles_, last_arena_);
+        if (!is_linear_1)
+        {
+            path1 = path_gen_.generate(wps_pos1, last_obstacles_, last_arena_);
+        }
+        if (!is_linear_2)
+        {
+            path2 = path_gen_.generate(wps_pos2, last_obstacles_, last_arena_);
+        }
 
         // Verifica connessioni prima di pubblicare (con timeout breve)
         wait_for_subscribers(1);
@@ -384,7 +384,6 @@ private:
 
         RCLCPP_INFO(this->get_logger(), "=== Path planning completed ===");
     }
-
 
     // ===== Member variables =====
     rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr client_re_mapping_trigger;
@@ -413,6 +412,8 @@ private:
     bool connections_ready_{false};
 
     planning_pkg::PrmPathGenerator path_gen_;
+    planning_pkg::LinearPathGenerator linear_gen_;
+
     planning_pkg::VisualizationUtils visualizer_;
 };
 

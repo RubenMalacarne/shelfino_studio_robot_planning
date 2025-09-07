@@ -88,6 +88,7 @@ add_executable(smooth_converter
 add_executable(path_orchestrator_prm 
   src/path_orchestrator_prm.cpp
   src/algo_path_planning/prm_path.cpp
+  src/algo_path_planning/linear_path.cpp
   src/utils/visualizer_rviz.cpp
   src/algo_path_planning/common_function.cpp 
 )
@@ -95,6 +96,7 @@ add_executable(path_orchestrator_prm
 add_executable(path_orchestrator_comb
   src/path_orchestrator_comb.cpp
   src/algo_path_planning/comb_path.cpp
+  src/algo_path_planning/linear_path.cpp
   src/utils/visualizer_rviz.cpp
   src/algo_path_planning/common_function.cpp 
 )
@@ -219,6 +221,7 @@ path_orchestrator_prm
 path_orchestrator_comb
 linear_path
 prm_path
+linear_path
 comb_path
 smooth_converter
 DESTINATION lib/${PROJECT_NAME}
