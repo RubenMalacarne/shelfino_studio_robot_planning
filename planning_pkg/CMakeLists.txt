@@ -64,10 +64,6 @@ add_library(comb_path
   src/algo_path_planning/comb_path.cpp
 )
 
-add_executable(main_base
-  src/main_base.cpp
-)
-
 add_library(visualizer_rviz
   src/utils/visualizer_rviz.cpp
 )
@@ -84,7 +80,11 @@ add_executable(smooth_converter
 )
 
 
-# Add executable for path_orchestrator and include PRM source
+add_executable(dubins_curve_converter
+  src/utils/dubins_curve_converter.cpp
+  src/utils/dubins_curve.cpp
+)
+
 add_executable(path_orchestrator_prm 
   src/path_orchestrator_prm.cpp
   src/algo_path_planning/prm_path.cpp
@@ -129,15 +129,6 @@ ament_target_dependencies(comb_path
   obstacles_msgs  
 )
 
-ament_target_dependencies(main_base
-  rclcpp
-  geometry_msgs
-  nav_msgs
-  tf2
-  tf2_geometry_msgs
-  obstacles_msgs
-)
-
 ament_target_dependencies(re_mapping
   rclcpp
   geometry_msgs
@@ -169,8 +160,6 @@ ament_target_dependencies(path_orchestrator_comb
   tf2_geometry_msgs
 )
 
-
-
 ament_target_dependencies(nav2_pathclient
   rclcpp
   rclcpp_action
@@ -193,6 +182,15 @@ ament_target_dependencies(smooth_converter
   std_srvs
 )
 
+ament_target_dependencies(dubins_curve_converter
+  rclcpp
+  nav_msgs
+  geometry_msgs
+  tf2
+  tf2_geometry_msgs
+  obstacles_msgs
+  std_srvs
+)
 ament_target_dependencies(visualizer_rviz
   rclcpp
   geometry_msgs
@@ -201,7 +199,6 @@ ament_target_dependencies(visualizer_rviz
   obstacles_msgs
 )
 
-target_include_directories(main_base PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(re_mapping PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(nav2_pathclient PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(path_orchestrator_prm PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -209,12 +206,12 @@ target_include_directories(path_orchestrator_comb PUBLIC ${CMAKE_CURRENT_SOURCE_
 target_include_directories(linear_path PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(comb_path PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(smooth_converter PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(dubins_curve_converter PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(prm_path PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(visualizer_rviz PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 
 install(TARGETS
-main_base
 re_mapping
 nav2_pathclient
 path_orchestrator_prm
@@ -223,6 +220,7 @@ linear_path
 prm_path
 linear_path
 comb_path
+dubins_curve_converter
 smooth_converter
 DESTINATION lib/${PROJECT_NAME}
 )
