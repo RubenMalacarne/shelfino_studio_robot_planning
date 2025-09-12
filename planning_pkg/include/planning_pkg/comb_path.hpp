@@ -84,10 +84,6 @@ namespace planning_pkg
             std::vector<std::pair<double, double>> points,
             std::vector<std::pair<double, double>> points_centroids);
 
-        std::vector<int> dijkstra_shortest_path_temp(
-        int start, int goal,
-        const std::vector<geometry_msgs::msg::Point> &points,
-        const std::vector<std::vector<int>> &adjacency) const;
 
     private:
         std::string default_frame_id_;

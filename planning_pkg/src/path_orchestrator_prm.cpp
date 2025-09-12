@@ -3,9 +3,9 @@
 #include <vector>
 #include <string>
 #include <cmath>
-#include <utility>   
-#include <algorithm> 
-#include <thread>    
+#include <utility>
+#include <algorithm>
+#include <thread>
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_srvs/srv/trigger.hpp"
@@ -66,6 +66,7 @@ public:
         path_gen_ = planning_pkg::PrmPathGenerator("map", 0.1);
         linear_gen_ = planning_pkg::LinearPathGenerator("map", 0.1);
         connections_ready_ = false;
+        path_planning_ready_ = false;
 
         RCLCPP_INFO(this->get_logger(), "Orchestor Ready- waiting for connections...");
     }
@@ -280,6 +281,11 @@ private:
 
     void path_planning()
     {
+        if (path_planning_ready_)
+        {
+            RCLCPP_DEBUG(this->get_logger(), "Path planning already in progress, skipping...");
+            return;
+        }
         if (!got_obstacles_ || !got_arena_ || !got_gates_ || !got_pos1_ || !got_pos2_)
         {
             RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
@@ -287,7 +293,7 @@ private:
                                  got_obstacles_, got_arena_, got_gates_, got_pos1_, got_pos2_);
             return;
         }
-
+        path_planning_ready_ = true;
         if (!connections_ready_)
         {
             RCLCPP_WARN(this->get_logger(), "Connections not ready yet, proceeding anyway...");
@@ -332,12 +338,12 @@ private:
             path2 = linear_gen_.generate(wps_pos2, last_obstacles_, last_arena_);
         }
 
-        // 3) implement PRM only if at least one path is not linear 
+        // 3) implement PRM only if at least one path is not linear
         if (!is_linear_1 || !is_linear_2)
         {
             // 1) Sample random points for PRM
             RCLCPP_INFO(this->get_logger(), "Sampling random points...");
-            path_gen_.sample_random_points(last_obstacles_, last_arena_, 100);
+            path_gen_.sample_random_points(last_obstacles_, last_arena_, 500);
 
             // 2) Build k-NN edges
             RCLCPP_INFO(this->get_logger(), "Building k-NN edges...");
@@ -401,7 +407,6 @@ private:
         RCLCPP_INFO(this->get_logger(), "=== Path planning completed ===");
     }
 
-    
     rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr client_re_mapping_trigger;
     rclcpp::TimerBase::SharedPtr init_timer_;
     rclcpp::TimerBase::SharedPtr connection_timer_;
@@ -426,7 +431,7 @@ private:
     bool got_pos1_{false};
     bool got_pos2_{false};
     bool connections_ready_{false};
-
+    bool path_planning_ready_{false};
     planning_pkg::PrmPathGenerator path_gen_;
     planning_pkg::LinearPathGenerator linear_gen_;
     planning_pkg::VisualizationUtils visualizer_;

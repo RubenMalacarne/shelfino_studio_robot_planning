@@ -15,32 +15,32 @@ namespace planning_pkg
     {
     public:
         static void compute_bbox(const geometry_msgs::msg::Polygon &poly,
-                                double &minx, double &miny,
-                                double &maxx, double &maxy);
+                                 double &minx, double &miny,
+                                 double &maxx, double &maxy);
 
         static bool point_in_polygon(const geometry_msgs::msg::Polygon &poly, double x, double y);
 
         static double point_to_segment_distance(double px, double py,
-                                               double ax, double ay,
-                                               double bx, double by);
+                                                double ax, double ay,
+                                                double bx, double by);
 
         static double distance_to_polygon_edges(const geometry_msgs::msg::Polygon &poly,
-                                               double x, double y);
+                                                double x, double y);
 
         static double dist2(const geometry_msgs::msg::Point &a,
-                           const geometry_msgs::msg::Point &b);
+                            const geometry_msgs::msg::Point &b);
 
         static bool point_is_valid(double x, double y,
-                                  const geometry_msgs::msg::Polygon &arena,
-                                  const obstacles_msgs::msg::ObstacleArrayMsg &obstacles,
-                                  double clearance);
+                                   const geometry_msgs::msg::Polygon &arena,
+                                   const obstacles_msgs::msg::ObstacleArrayMsg &obstacles,
+                                   double clearance);
 
         static bool segment_is_valid(const geometry_msgs::msg::Point &a,
-                                    const geometry_msgs::msg::Point &b,
-                                    const geometry_msgs::msg::Polygon &arena,
-                                    const obstacles_msgs::msg::ObstacleArrayMsg &obstacles,
-                                    double clearance,
-                                    double sample_step);
+                                     const geometry_msgs::msg::Point &b,
+                                     const geometry_msgs::msg::Polygon &arena,
+                                     const obstacles_msgs::msg::ObstacleArrayMsg &obstacles,
+                                     double clearance,
+                                     double sample_step);
 
         static std::vector<double> line_segment_intersection(double y, double x1, double y1, double x2, double y2);
 
@@ -52,13 +52,16 @@ namespace planning_pkg
             const geometry_msgs::msg::Polygon &arena,
             double clearance,
             double sample_step);
-        
+
+        static std::vector<int> dijkstra_shortest_path_temp(
+            int start, int goal,
+            const std::vector<geometry_msgs::msg::Point> &points,
+            const std::vector<std::vector<int>> &adjacency);
+
         static double yaw_from_quat_(const geometry_msgs::msg::Quaternion &qmsg);
 
     private:
-
         static inline double sqr(double v) { return v * v; }
-
     };
 }
 

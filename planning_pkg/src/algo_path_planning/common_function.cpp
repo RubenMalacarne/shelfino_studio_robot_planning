@@ -243,87 +243,61 @@ namespace planning_pkg
     {
         if (original_path.size() <= 2)
         {
-            return original_path; // Non c'è niente da ottimizzare
+            return original_path; 
         }
 
         std::vector<geometry_msgs::msg::Point> optimized_path;
-        optimized_path.push_back(original_path[0]); // Aggiungi sempre il punto di start
+        optimized_path.push_back(original_path[0]); 
 
         size_t current_index = 0;
+        const size_t goal_index = original_path.size() - 1;
 
-        while (current_index < original_path.size() - 1)
+        while (current_index < goal_index)
         {
+            // connessione diretta al goal ???
+            if (segment_is_valid(original_path[current_index],
+                                 original_path[goal_index],
+                                 arena, obstacles, clearance, sample_step))
+            {
+                optimized_path.push_back(original_path[goal_index]);
+                break;
+            }
+
             size_t furthest_reachable = current_index;
 
-            // Cerca il punto più lontano raggiungibile direttamente dal punto corrente
-            for (size_t test_index = current_index + 1; test_index < original_path.size(); ++test_index)
+            for (size_t test_index = goal_index - 1; test_index > current_index; --test_index)
             {
                 if (segment_is_valid(original_path[current_index],
                                      original_path[test_index],
                                      arena, obstacles, clearance, sample_step))
                 {
                     furthest_reachable = test_index;
-                }
-                else
-                {
-                    break; // Se questo punto non è raggiungibile, i successivi probabilmente non lo saranno
+                    //log print
+                    //LOG.INFO("SIAMO QUI, STO USCENDO!!!!");
+                    break; 
+
                 }
             }
 
-            // Se non possiamo andare oltre il prossimo punto, aggiungi il prossimo punto
             if (furthest_reachable == current_index)
             {
-                // Caso di emergenza: non possiamo nemmeno raggiungere il prossimo punto
-                // Questo non dovrebbe succedere se il path originale è valido
-                // RCLCPP_WARN(rclcpp::get_logger("prm_path_generator"),
-                //             "Impossibile raggiungere il punto successivo durante l'ottimizzazione");
                 furthest_reachable = current_index + 1;
             }
 
-            // Se abbiamo raggiunto il goal, aggiungilo e termina
-            if (furthest_reachable == original_path.size() - 1)
-            {
-                if (optimized_path.back().x != original_path.back().x ||
-                    optimized_path.back().y != original_path.back().y)
-                {
-                    optimized_path.push_back(original_path.back());
-                }
-                break;
-            }
-
-            // Altrimenti, aggiungi il punto più lontano raggiungibile (se diverso dal corrente)
-            if (furthest_reachable > current_index)
-            {
-                optimized_path.push_back(original_path[furthest_reachable]);
-                current_index = furthest_reachable;
-            }
-            else
-            {
-                // Fallback: avanza di un punto
-                current_index++;
-                if (current_index < original_path.size())
-                {
-                    optimized_path.push_back(original_path[current_index]);
-                }
-            }
+            optimized_path.push_back(original_path[furthest_reachable]);
+            current_index = furthest_reachable;
         }
-
-        // Assicurati che il goal sia sempre presente
         if (optimized_path.empty() ||
-            (optimized_path.back().x != original_path.back().x ||
-             optimized_path.back().y != original_path.back().y))
+            (std::abs(optimized_path.back().x - original_path.back().x) > 1e-6 ||
+             std::abs(optimized_path.back().y - original_path.back().y) > 1e-6))
         {
             optimized_path.push_back(original_path.back());
         }
 
-        // RCLCPP_INFO(rclcpp::get_logger("prm_path_generator"),
-        //             "Path ottimizzato: da %zu punti a %zu punti",
-        //             original_path.size(), optimized_path.size());
-
         return optimized_path;
     }
 
-     // methods from quaternion to RPY --> nav2 accetta un path con orientamento in RPY
+    // methods from quaternion to RPY --> nav2 accetta un path con orientamento in RPY
     double CommonFunction::yaw_from_quat_(const geometry_msgs::msg::Quaternion &qmsg)
     {
         tf2::Quaternion q(qmsg.x, qmsg.y, qmsg.z, qmsg.w);
@@ -332,4 +306,74 @@ namespace planning_pkg
         return y;
     }
 
+    std::vector<int> CommonFunction::dijkstra_shortest_path_temp(
+        int start, int goal,
+        const std::vector<geometry_msgs::msg::Point> &points,
+        const std::vector<std::vector<int>> &adjacency)
+    {
+
+        if (start == goal)
+            return {start};
+
+        const size_t N = points.size();
+        if (start < 0 || goal < 0 || static_cast<size_t>(start) >= N || static_cast<size_t>(goal) >= N)
+        {
+            return {};
+        }
+
+        std::vector<double> dist(N, std::numeric_limits<double>::infinity());
+        std::vector<int> prev(N, -1);
+        std::vector<bool> visited(N, false);
+
+        dist[start] = 0.0;
+
+        for (size_t count = 0; count < N; ++count)
+        {
+            int u = -1;
+            for (size_t v = 0; v < N; ++v)
+            {
+                if (!visited[v] && (u == -1 || dist[v] < dist[u]))
+                {
+                    u = static_cast<int>(v);
+                }
+            }
+
+            if (u == -1 || dist[u] == std::numeric_limits<double>::infinity())
+                break;
+
+            visited[u] = true;
+
+            if (u == goal)
+                break;
+
+            for (int v : adjacency[u])
+            {
+                if (!visited[v])
+                {
+                    double weight = std::sqrt(CommonFunction::dist2(points[u], points[v]));
+                    double alt = dist[u] + weight;
+                    if (alt < dist[v])
+                    {
+                        dist[v] = alt;
+                        prev[v] = u;
+                    }
+                }
+            }
+        }
+
+        // Ricostruisci il path
+        std::vector<int> path;
+        for (int at = goal; at != -1; at = prev[at])
+        {
+            path.push_back(at);
+        }
+
+        if (path.empty() || path.back() != start)
+        {
+            return {}; // Nessun path trovato
+        }
+
+        std::reverse(path.begin(), path.end());
+        return path;
+    }
 }

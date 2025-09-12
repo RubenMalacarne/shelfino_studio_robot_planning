@@ -59,10 +59,7 @@ private:
   double default_step_size_;
 
   std::vector<int> dijkstra_shortest_path(int start, int goal) const;
-  std::vector<int> dijkstra_shortest_path_temp(
-    int start, int goal, 
-    const std::vector<geometry_msgs::msg::Point>& points,
-    const std::vector<std::vector<int>>& adjacency) const;
+
 };
 
 } // namespace planning_pkg

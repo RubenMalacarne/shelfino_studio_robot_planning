@@ -66,6 +66,7 @@ public:
         path_gen_ = planning_pkg::CombPathGenerator("map", 0.1);
         linear_gen_ = planning_pkg::LinearPathGenerator("map", 0.1);
         connections_ready_ = false;
+        path_planning_ready_ = false;
 
         RCLCPP_INFO(this->get_logger(), "Orchestor Ready- waiting for connections...");
     }
@@ -278,6 +279,11 @@ private:
 
     void path_planning()
     {
+        if (path_planning_ready_)
+        {
+            RCLCPP_DEBUG(this->get_logger(), "Path planning already in progress, skipping...");
+            return;
+        }
         if (!got_obstacles_ || !got_arena_ || !got_gates_ || !got_pos1_ || !got_pos2_)
         {
             RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
@@ -285,6 +291,7 @@ private:
                                  got_obstacles_, got_arena_, got_gates_, got_pos1_, got_pos2_);
             return;
         }
+        path_planning_ready_ = true;
         if (!connections_ready_)
         {
             RCLCPP_WARN(this->get_logger(), "Connections not ready yet, proceeding anyway...");
@@ -441,6 +448,7 @@ private:
     bool got_pos1_{false};
     bool got_pos2_{false};
     bool connections_ready_{false};
+    bool path_planning_ready_{false};
 
     planning_pkg::CombPathGenerator path_gen_;
     planning_pkg::LinearPathGenerator linear_gen_;

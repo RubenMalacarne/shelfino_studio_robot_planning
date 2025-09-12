@@ -198,7 +198,7 @@ namespace planning_pkg
         }
 
         // 11. Esegui Dijkstra
-        std::vector<int> path_indices = dijkstra_shortest_path_temp(start_node, goal_node, temp_points, adjacency);
+        std::vector<int> path_indices = CommonFunction::dijkstra_shortest_path_temp(start_node, goal_node, temp_points, adjacency);
 
         if (path_indices.empty())
         {
@@ -215,7 +215,6 @@ namespace planning_pkg
                 original_path_points.push_back(temp_points[idx]);
             }
         }
-
         // 12. ottimizza il path con raycasting
         std::vector<geometry_msgs::msg::Point> optimized_path_points =
             CommonFunction::optimize_path_with_raycasting(original_path_points, obstacles, arena, 0.15, 0.05);
@@ -251,76 +250,6 @@ namespace planning_pkg
     return path;
 }
 
-std::vector<int> CombPathGenerator::dijkstra_shortest_path_temp(
-    int start, int goal,
-    const std::vector<geometry_msgs::msg::Point> &points,
-    const std::vector<std::vector<int>> &adjacency) const
-{
-
-    if (start == goal)
-        return {start};
-
-    const size_t N = points.size();
-    if (start < 0 || goal < 0 || static_cast<size_t>(start) >= N || static_cast<size_t>(goal) >= N)
-    {
-        return {};
-    }
-
-    std::vector<double> dist(N, std::numeric_limits<double>::infinity());
-    std::vector<int> prev(N, -1);
-    std::vector<bool> visited(N, false);
-
-    dist[start] = 0.0;
-
-    for (size_t count = 0; count < N; ++count)
-    {
-        int u = -1;
-        for (size_t v = 0; v < N; ++v)
-        {
-            if (!visited[v] && (u == -1 || dist[v] < dist[u]))
-            {
-                u = static_cast<int>(v);
-            }
-        }
-
-        if (u == -1 || dist[u] == std::numeric_limits<double>::infinity())
-            break;
-
-        visited[u] = true;
-
-        if (u == goal)
-            break;
-
-        for (int v : adjacency[u])
-        {
-            if (!visited[v])
-            {
-                double weight = std::sqrt(CommonFunction::dist2(points[u], points[v]));
-                double alt = dist[u] + weight;
-                if (alt < dist[v])
-                {
-                    dist[v] = alt;
-                    prev[v] = u;
-                }
-            }
-        }
-    }
-
-    // Ricostruisci il path
-    std::vector<int> path;
-    for (int at = goal; at != -1; at = prev[at])
-    {
-        path.push_back(at);
-    }
-
-    if (path.empty() || path.back() != start)
-    {
-        return {}; // Nessun path trovato
-    }
-
-    std::reverse(path.begin(), path.end());
-    return path;
-}
 
 std::vector<std::pair<double, double>> CombPathGenerator::get_pointlist(
     const obstacles_msgs::msg::ObstacleArrayMsg &obstacles,
