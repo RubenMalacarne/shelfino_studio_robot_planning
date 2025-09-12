@@ -29,3 +29,8 @@ services:
 
 # docker exec -it ros2_robot_planning_project bash
 # colcon build --symlink-install --parallel-workers 1 && source install/setup.bash 
+
+#// to launch the service dubins and send the path:  
+#// ros2 service call /service_trigger_smoothing_path std_srvs/srv/Trigger {} 
+
+#// ros2 service call /service_trigger_dubins_path std_srvs/srv/Trigger {}
