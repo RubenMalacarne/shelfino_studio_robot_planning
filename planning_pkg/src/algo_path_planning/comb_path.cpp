@@ -1,10 +1,10 @@
 #include "planning_pkg/comb_path.hpp"
 #include "planning_pkg/common_function.hpp"
-#include <algorithm> // std::min, std::max, std::clamp
-#include <cmath>     // std::sqrt
-#include <limits>    // std::numeric_limits
-#include <random>    // random_device, mt19937, uniform_real_distribution
-#include <utility>   // std::move
+#include <algorithm> 
+#include <cmath>     
+#include <limits>    
+#include <random>    
+#include <utility>   
 #include <vector>
 #include <tuple>
 #include <map>
@@ -48,13 +48,6 @@ namespace planning_pkg
         {
             RCLCPP_ERROR(rclcpp::get_logger("comb_path_generator"),
                          "Punto di start non valido");
-            return path;
-        }
-
-        if (!CommonFunction::point_is_valid(goal.first, goal.second, arena, obstacles, 0.15))
-        {
-            RCLCPP_ERROR(rclcpp::get_logger("comb_path_generator"),
-                         "Punto di goal non valido");
             return path;
         }
 
@@ -105,7 +98,6 @@ namespace planning_pkg
         // 6. Converti i punti in formato geometry_msgs::msg::Point per Dijkstra
         std::vector<geometry_msgs::msg::Point> temp_points;
 
-        // Aggiungi i punti delle linee
         for (const auto &point : points_line)
         {
             geometry_msgs::msg::Point p;
@@ -115,7 +107,7 @@ namespace planning_pkg
             temp_points.push_back(p);
         }
 
-        // Aggiungi i centroidi
+        // 7. Aggiungi i centroidi
         for (const auto &centroid : points_centroids)
         {
             geometry_msgs::msg::Point p;
@@ -125,11 +117,8 @@ namespace planning_pkg
             temp_points.push_back(p);
         }
 
-
         temp_points.push_back(start_point);
         temp_points.push_back(goal_point);
-
-        // Ridimensiona la lista di adiacenza
         adjacency.resize(temp_points.size());
 
         int start_node = static_cast<int>(temp_points.size() - 2);
@@ -139,7 +128,7 @@ namespace planning_pkg
         const double max_connection_distance = 2.0;
         const size_t max_connections = 10;
 
-        // Connetti start
+        // 9. connetti start ai nodi più vicini
         std::vector<std::pair<double, int>> start_distances;
         for (size_t i = 0; i < temp_points.size() - 2; ++i)
         {
@@ -167,7 +156,7 @@ namespace planning_pkg
             }
         }
 
-        // Connetti goal
+        // 9. connetti goal ai nodi più vicini
         std::vector<std::pair<double, int>> goal_distances;
         for (size_t i = 0; i < temp_points.size() - 2; ++i)
         {
@@ -195,7 +184,7 @@ namespace planning_pkg
             }
         }
 
-        // Verifica connessione diretta start-goal
+        // 10. Verifica connessione diretta start-goal
         double dx = goal_point.x - start_point.x;
         double dy = goal_point.y - start_point.y;
         double direct_dist = std::sqrt(dx * dx + dy * dy);
@@ -208,7 +197,7 @@ namespace planning_pkg
             adjacency[goal_node].push_back(start_node);
         }
 
-        // 9. Esegui Dijkstra
+        // 11. Esegui Dijkstra
         std::vector<int> path_indices = dijkstra_shortest_path_temp(start_node, goal_node, temp_points, adjacency);
 
         if (path_indices.empty())
@@ -227,6 +216,7 @@ namespace planning_pkg
             }
         }
 
+        // 12. ottimizza il path con raycasting
         std::vector<geometry_msgs::msg::Point> optimized_path_points =
             CommonFunction::optimize_path_with_raycasting(original_path_points, obstacles, arena, 0.15, 0.05);
 
@@ -258,6 +248,77 @@ namespace planning_pkg
     RCLCPP_INFO(rclcpp::get_logger("comb_path_generator"),
                 "Path generato con %zu waypoints", path.poses.size());
 
+    return path;
+}
+
+std::vector<int> CombPathGenerator::dijkstra_shortest_path_temp(
+    int start, int goal,
+    const std::vector<geometry_msgs::msg::Point> &points,
+    const std::vector<std::vector<int>> &adjacency) const
+{
+
+    if (start == goal)
+        return {start};
+
+    const size_t N = points.size();
+    if (start < 0 || goal < 0 || static_cast<size_t>(start) >= N || static_cast<size_t>(goal) >= N)
+    {
+        return {};
+    }
+
+    std::vector<double> dist(N, std::numeric_limits<double>::infinity());
+    std::vector<int> prev(N, -1);
+    std::vector<bool> visited(N, false);
+
+    dist[start] = 0.0;
+
+    for (size_t count = 0; count < N; ++count)
+    {
+        int u = -1;
+        for (size_t v = 0; v < N; ++v)
+        {
+            if (!visited[v] && (u == -1 || dist[v] < dist[u]))
+            {
+                u = static_cast<int>(v);
+            }
+        }
+
+        if (u == -1 || dist[u] == std::numeric_limits<double>::infinity())
+            break;
+
+        visited[u] = true;
+
+        if (u == goal)
+            break;
+
+        for (int v : adjacency[u])
+        {
+            if (!visited[v])
+            {
+                double weight = std::sqrt(CommonFunction::dist2(points[u], points[v]));
+                double alt = dist[u] + weight;
+                if (alt < dist[v])
+                {
+                    dist[v] = alt;
+                    prev[v] = u;
+                }
+            }
+        }
+    }
+
+    // Ricostruisci il path
+    std::vector<int> path;
+    for (int at = goal; at != -1; at = prev[at])
+    {
+        path.push_back(at);
+    }
+
+    if (path.empty() || path.back() != start)
+    {
+        return {}; // Nessun path trovato
+    }
+
+    std::reverse(path.begin(), path.end());
     return path;
 }
 
@@ -315,7 +376,7 @@ std::vector<HorizontalLine> CombPathGenerator::set_vertical_line(
 {
     std::vector<HorizontalLine> horizontal_lines;
 
-    // Per ogni punto, crea una linea orizzontale passante per quel punto
+    // Per ogni punto, linea orizzontale passante per quel punto
     for (const auto &point : points)
     {
         double y = point.second;
@@ -789,78 +850,6 @@ std::vector<std::vector<int>> CombPathGenerator::get_arc(
                 adjacency_list.size(), points.size(), points_centroids.size());
 
     return adjacency_list;
-}
-
-// Versione temporanea di Dijkstra che usa i punti e adiacenze temporanei
-std::vector<int> CombPathGenerator::dijkstra_shortest_path_temp(
-    int start, int goal,
-    const std::vector<geometry_msgs::msg::Point> &points,
-    const std::vector<std::vector<int>> &adjacency) const
-{
-
-    if (start == goal)
-        return {start};
-
-    const size_t N = points.size();
-    if (start < 0 || goal < 0 || static_cast<size_t>(start) >= N || static_cast<size_t>(goal) >= N)
-    {
-        return {};
-    }
-
-    std::vector<double> dist(N, std::numeric_limits<double>::infinity());
-    std::vector<int> prev(N, -1);
-    std::vector<bool> visited(N, false);
-
-    dist[start] = 0.0;
-
-    for (size_t count = 0; count < N; ++count)
-    {
-        int u = -1;
-        for (size_t v = 0; v < N; ++v)
-        {
-            if (!visited[v] && (u == -1 || dist[v] < dist[u]))
-            {
-                u = static_cast<int>(v);
-            }
-        }
-
-        if (u == -1 || dist[u] == std::numeric_limits<double>::infinity())
-            break;
-
-        visited[u] = true;
-
-        if (u == goal)
-            break;
-
-        for (int v : adjacency[u])
-        {
-            if (!visited[v])
-            {
-                double weight = std::sqrt(CommonFunction::dist2(points[u], points[v]));
-                double alt = dist[u] + weight;
-                if (alt < dist[v])
-                {
-                    dist[v] = alt;
-                    prev[v] = u;
-                }
-            }
-        }
-    }
-
-    // Ricostruisci il path
-    std::vector<int> path;
-    for (int at = goal; at != -1; at = prev[at])
-    {
-        path.push_back(at);
-    }
-
-    if (path.empty() || path.back() != start)
-    {
-        return {}; // Nessun path trovato
-    }
-
-    std::reverse(path.begin(), path.end());
-    return path;
 }
 
 bool CombPathGenerator::point_in_polygon(const geometry_msgs::msg::Polygon &poly, double x, double y) const

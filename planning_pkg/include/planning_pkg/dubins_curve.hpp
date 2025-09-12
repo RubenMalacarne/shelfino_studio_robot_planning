@@ -37,7 +37,6 @@ private:
     std::vector<std::vector<double>> calc_lrl_from_origin(std::vector<double> e);
 };
 
-// Function declarations
 std::tuple<std::vector<double>, std::vector<double>> gen_path(
     const std::vector<double> &s, const std::vector<std::vector<double>> &path,
     double r = 1.0, double step = 0.1);

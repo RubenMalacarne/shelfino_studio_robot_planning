@@ -28,18 +28,25 @@ namespace
     Vec2 operator*(double s) const { return {x * s, y * s}; }
     Vec2 operator/(double s) const { return {x / s, y / s}; }
   };
-  // Useful operations for Vec2 (assuming 2D vectors in XY plane)
+  
   inline double dot(const Vec2 &a, const Vec2 &b) { return a.x * b.x + a.y * b.y; }
+
   inline double cross(const Vec2 &a, const Vec2 &b) { return a.x * b.y - a.y * b.x; }
+
   inline double norm(const Vec2 &a) { return std::hypot(a.x, a.y); }
+  
   inline Vec2 normalize(const Vec2 &a)
   {
     double n = norm(a);
     return (n > 0) ? (a / n) : Vec2{0, 0};
   }
+  
   inline Vec2 rot90L(const Vec2 &a) { return Vec2{-a.y, a.x}; }
+  
   inline Vec2 rot90R(const Vec2 &a) { return Vec2{a.y, -a.x}; }
+  
   inline double angleOf(const Vec2 &d) { return std::atan2(d.y, d.x); }
+  
   inline double wrapPi(double a)
   {
     while (a > M_PI)
@@ -48,6 +55,7 @@ namespace
       a += 2 * M_PI;
     return a;
   }
+  
   bool nearlyEqual(const Vec2 &a, const Vec2 &b, double eps)
   {
     return std::hypot(a.x - b.x, a.y - b.y) <= eps;
@@ -59,6 +67,7 @@ namespace
     q.setRPY(0.0, 0.0, yaw);
     return tf2::toMsg(q);
   }
+
 }
 
 class SmoothPathNode : public rclcpp::Node
@@ -227,7 +236,6 @@ private:
       Vec2 C2 = X + n_v * R;
       Vec2 C = (C1 + C2) * 0.5;
 
-      // Segmento rettilineo fino a E
       Vec2 lastP{out_path.poses.back().pose.position.x, out_path.poses.back().pose.position.y};
       Vec2 seg = E - lastP;
       double L = norm(seg);
@@ -322,14 +330,12 @@ private:
     RCLCPP_INFO(get_logger(), "Smoothed path_2 ready with %zu poses.", out_path.poses.size());
   }
   
-  // ==== Members and Parameters====
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr sub_path_in_;
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr sub_path_in_2_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pub_path_out_path_;
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pub_path_out_path_2_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr srv_trigger;
-
-  // Store latest smoothed paths
+  
   nav_msgs::msg::Path latest_smoothed_path_1_;
   nav_msgs::msg::Path latest_smoothed_path_2_;
   

@@ -47,7 +47,6 @@ public:
         return this->get_parameter("marker_frame").as_string();
     }
 
-
     // Set
     void set_pos(pose_t& pos, const geometry_msgs::msg::PoseWithCovarianceStamped& msg);
     void set_obstacles(const obstacles_msgs::msg::ObstacleArrayMsg &msg);

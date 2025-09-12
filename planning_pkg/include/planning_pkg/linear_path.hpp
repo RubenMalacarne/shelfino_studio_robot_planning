@@ -23,7 +23,6 @@ namespace planning_pkg
         const obstacles_msgs::msg::ObstacleArrayMsg &obstacles,
         const geometry_msgs::msg::Polygon &arena);
 
-    // Setter e getter opzionali
     void set_default_frame_id(const std::string &fid);
     void set_default_step_size(double s);
     const std::string &default_frame_id() const;

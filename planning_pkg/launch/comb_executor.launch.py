@@ -17,6 +17,18 @@ def generate_launch_description():
         output='screen'
     )
 
+    dubins_converter_node = TimerAction(
+        period=1.0,
+        actions=[
+            launch_ros.actions.Node(
+                package='planning_pkg',
+                executable='dubins_curve_converter',
+                name='dubins_converter',
+                output='screen'
+            )
+        ]
+    )
+
     smooth_converter_node = TimerAction(
         period=1.0,
         actions=[
@@ -29,7 +41,7 @@ def generate_launch_description():
         ]
     )
 
-    prm_orchestrator_node = TimerAction(
+    orchestrator_node = TimerAction(
         period=2.0,
         actions=[
             launch_ros.actions.Node(
@@ -44,8 +56,8 @@ def generate_launch_description():
     nodes = [
         re_mapping_node,
         nav2_pathclient_node,
-        smooth_converter_node,
-        prm_orchestrator_node
+        dubins_converter_node, #or smooth_converter_node
+        orchestrator_node
     ]
 
     return launch.LaunchDescription(nodes)

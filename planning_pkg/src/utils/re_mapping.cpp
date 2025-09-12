@@ -136,7 +136,7 @@ void ReMapping::callback_trigger(const std::shared_ptr<std_srvs::srv::Trigger::R
     publish_gates();
     success = true;
   }
-  //print the gates
+  //print the position gates
   // if (!gates.empty()) {
   //   RCLCPP_INFO(this->get_logger(), "Gates:");
   //   for (const auto &gate : gates) {
@@ -179,6 +179,7 @@ void ReMapping::callback_trigger(const std::shared_ptr<std_srvs::srv::Trigger::R
 // ==== Set methods ====
 void ReMapping::set_obstacles(const obstacles_msgs::msg::ObstacleArrayMsg &msg)
 {
+  RCLCPP_INFO(this->get_logger(), "Setting obstacles");
   inflated_obstacles.header = msg.header;
 
   for (const auto &obstacle : msg.obstacles) {
@@ -234,7 +235,6 @@ void ReMapping::set_obstacles(const obstacles_msgs::msg::ObstacleArrayMsg &msg)
 
 void ReMapping::set_borders(const geometry_msgs::msg::Polygon &msg)
 {
-  // Handle the borders of the arena
   RCLCPP_INFO(this->get_logger(), "Setting borders");
   
   //compute centroid
@@ -272,7 +272,6 @@ void ReMapping::set_borders(const geometry_msgs::msg::Polygon &msg)
 
 void ReMapping::set_gates(const geometry_msgs::msg::PoseArray &msg)
 {
-  // Handle the gates
   RCLCPP_INFO(this->get_logger(), "Setting gates");
   
   for (const auto &pose : msg.poses)
@@ -292,7 +291,7 @@ void ReMapping::set_gates(const geometry_msgs::msg::PoseArray &msg)
 void ReMapping::set_pos(pose_t& pos, const geometry_msgs::msg::PoseWithCovarianceStamped& msg)
 {
   RCLCPP_INFO(this->get_logger(), "Setting position");
-  pos.clear(); // Clear previous data
+  pos.clear(); // Clear previous data --> evita refusi
   pos.push_back(msg.pose.pose.position.x);
   pos.push_back(msg.pose.pose.position.y);
   tf2::Quaternion q(msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, 
@@ -302,7 +301,6 @@ void ReMapping::set_pos(pose_t& pos, const geometry_msgs::msg::PoseWithCovarianc
   m.getRPY(r, p, y);
   pos.push_back(y);
 }
-
 
 // ==== Publish methods ====
 void ReMapping::publish_gates()

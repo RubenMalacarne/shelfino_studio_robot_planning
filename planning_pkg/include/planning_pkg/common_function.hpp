@@ -6,20 +6,20 @@
 #include <geometry_msgs/msg/point.hpp>
 #include <obstacles_msgs/msg/obstacle_array_msg.hpp>
 
+#include "tf2/LinearMath/Quaternion.h"
+#include "tf2/LinearMath/Matrix3x3.h"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 namespace planning_pkg
 {
     class CommonFunction
     {
     public:
-        // Bounding box computation
         static void compute_bbox(const geometry_msgs::msg::Polygon &poly,
                                 double &minx, double &miny,
                                 double &maxx, double &maxy);
 
-        // Point in polygon test
         static bool point_in_polygon(const geometry_msgs::msg::Polygon &poly, double x, double y);
 
-        // Distance calculations
         static double point_to_segment_distance(double px, double py,
                                                double ax, double ay,
                                                double bx, double by);
@@ -30,7 +30,6 @@ namespace planning_pkg
         static double dist2(const geometry_msgs::msg::Point &a,
                            const geometry_msgs::msg::Point &b);
 
-        // Validation functions
         static bool point_is_valid(double x, double y,
                                   const geometry_msgs::msg::Polygon &arena,
                                   const obstacles_msgs::msg::ObstacleArrayMsg &obstacles,
@@ -43,21 +42,21 @@ namespace planning_pkg
                                     double clearance,
                                     double sample_step);
 
-        // Intersection calculations
         static std::vector<double> line_segment_intersection(double y, double x1, double y1, double x2, double y2);
 
         static std::vector<double> line_circle_intersection(double y, double center_x, double center_y, double radius);
 
-        // Path optimization
         static std::vector<geometry_msgs::msg::Point> optimize_path_with_raycasting(
             const std::vector<geometry_msgs::msg::Point> &original_path,
             const obstacles_msgs::msg::ObstacleArrayMsg &obstacles,
             const geometry_msgs::msg::Polygon &arena,
             double clearance,
             double sample_step);
+        
+        static double yaw_from_quat_(const geometry_msgs::msg::Quaternion &qmsg);
 
     private:
-        // Utility functions
+
         static inline double sqr(double v) { return v * v; }
 
     };

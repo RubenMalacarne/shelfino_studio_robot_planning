@@ -222,6 +222,7 @@ linear_path
 comb_path
 dubins_curve_converter
 smooth_converter
+visualizer_rviz
 DESTINATION lib/${PROJECT_NAME}
 )
 

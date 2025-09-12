@@ -4,7 +4,7 @@
 #include <vector>
 #include <utility>
 #include <random>
-#include <cstddef>   // std::size_t
+#include <cstddef>   
 
 #include "rclcpp/rclcpp.hpp"
 #include "nav_msgs/msg/path.hpp"
@@ -21,19 +21,15 @@ namespace planning_pkg
 class PrmPathGenerator
 {
 public:
-  // Ctor principale
   PrmPathGenerator(std::string default_frame_id, double default_step_size);
 
-  // Ctor di default (valori comodi)
   PrmPathGenerator() : PrmPathGenerator("default_frame", 0.1) {}
 
-  // Genera un Path (placeholder: per ora non costruisce la roadmap)
   nav_msgs::msg::Path generate(
     const std::vector<std::pair<double, double>>& waypoints,
     const obstacles_msgs::msg::ObstacleArrayMsg& obstacles,
     const geometry_msgs::msg::Polygon& arena) const;
 
-  // Campiona punti casuali dentro l’arena evitando gli ostacoli (con clearance in .cpp)
   void sample_random_points(
     const obstacles_msgs::msg::ObstacleArrayMsg& obstacles,
     const geometry_msgs::msg::Polygon& arena,
@@ -45,17 +41,14 @@ public:
                        double clearance = 0.15,
                        double sample_step = 0.1);
 
-  // Storage pubblico dei punti campionati (se preferisci, rendilo private + getter)
+  
   std::vector<geometry_msgs::msg::Point> random_points;
   std::vector<std::vector<int>> knn_adj;
-  // Setter / getter parametri di default
   void set_default_frame_id(const std::string& fid);
   void set_default_step_size(double s);
 
   const std::string& default_frame_id() const;
   double default_step_size() const;
-
-  // Converte una lista di indici (su random_points) in polilinea (x,y)
   std::vector<std::pair<double,double>>
   indices_to_polyline(const std::vector<int>& idx_path) const;
 
@@ -66,7 +59,6 @@ private:
   double default_step_size_;
 
   std::vector<int> dijkstra_shortest_path(int start, int goal) const;
-  // Versione temporanea di Dijkstra per grafo esteso con start/goal
   std::vector<int> dijkstra_shortest_path_temp(
     int start, int goal, 
     const std::vector<geometry_msgs::msg::Point>& points,

@@ -322,4 +322,14 @@ namespace planning_pkg
 
         return optimized_path;
     }
+
+     // methods from quaternion to RPY --> nav2 accetta un path con orientamento in RPY
+    double CommonFunction::yaw_from_quat_(const geometry_msgs::msg::Quaternion &qmsg)
+    {
+        tf2::Quaternion q(qmsg.x, qmsg.y, qmsg.z, qmsg.w);
+        double r, p, y;
+        tf2::Matrix3x3(q).getRPY(r, p, y);
+        return y;
+    }
+
 }

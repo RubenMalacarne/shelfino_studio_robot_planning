@@ -24,10 +24,10 @@
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
 #include "planning_pkg/common.hpp"
+#include "planning_pkg/common_function.hpp"
 #include "planning_pkg/prm_path.hpp"
 #include "planning_pkg/linear_path.hpp"
 #include "planning_pkg/visualizer_rviz.hpp"
-#include "planning_pkg/linear_path.hpp"
 using rclcpp::QoS;
 using namespace std::chrono_literals;
 
@@ -63,7 +63,6 @@ public:
         connection_timer_ = this->create_wall_timer(2s, std::bind(&PathPlanningOrchestratorClient::on_connection_ready_, this));
         init_timer_ = this->create_wall_timer(3s, std::bind(&PathPlanningOrchestratorClient::init_service_call_, this));
 
-        RCLCPP_INFO(this->get_logger(), "Orchestor - waiting for connections...");
         path_gen_ = planning_pkg::PrmPathGenerator("map", 0.1);
         linear_gen_ = planning_pkg::LinearPathGenerator("map", 0.1);
         connections_ready_ = false;
@@ -222,7 +221,7 @@ private:
         for (size_t i = 0; i < last_gates_.poses.size(); ++i)
         {
             const auto &p = last_gates_.poses[i];
-            const double yaw = yaw_from_quat_(p.orientation);
+            const double yaw = planning_pkg::CommonFunction::yaw_from_quat_(p.orientation);
             RCLCPP_INFO(this->get_logger(), "Gate %zu -> x=%.3f, y=%.3f, yaw=%.3f",
                         i, p.position.x, p.position.y, yaw);
         }
@@ -237,7 +236,7 @@ private:
         got_pos1_ = true;
 
         const auto &p = last_pos1_.pose.pose;
-        const double yaw = yaw_from_quat_(p.orientation);
+        const double yaw = planning_pkg::CommonFunction::yaw_from_quat_(p.orientation);
         RCLCPP_INFO(this->get_logger(), "Received Pos1 -> x=%.3f, y=%.3f, yaw=%.3f",
                     p.position.x, p.position.y, yaw);
 
@@ -251,21 +250,12 @@ private:
         got_pos2_ = true;
 
         const auto &p = last_pos2_.pose.pose;
-        const double yaw = yaw_from_quat_(p.orientation);
+        const double yaw = planning_pkg::CommonFunction::yaw_from_quat_(p.orientation);
         RCLCPP_INFO(this->get_logger(), "Received Pos2 -> x=%.3f, y=%.3f, yaw=%.3f",
                     p.position.x, p.position.y, yaw);
 
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         path_planning();
-    }
-
-    // methods from quaternion to RPY --> nav2 accetta un path con orientamento in RPY
-    static double yaw_from_quat_(const geometry_msgs::msg::Quaternion &qmsg)
-    {
-        tf2::Quaternion q(qmsg.x, qmsg.y, qmsg.z, qmsg.w);
-        double r, p, y;
-        tf2::Matrix3x3(q).getRPY(r, p, y);
-        return y;
     }
 
     std::pair<double, double> find_nearest_gate(const geometry_msgs::msg::Point &pos, const geometry_msgs::msg::PoseArray &gates)
@@ -308,6 +298,7 @@ private:
         const auto &p1 = last_pos1_.pose.pose.position;
         const auto &p2 = last_pos2_.pose.pose.position;
 
+        // 0) find nearest gate for each robot
         const auto nearest_gate_pos1 = find_nearest_gate(p1, last_gates_);
         RCLCPP_INFO(this->get_logger(), "Nearest gate for Robot 1: x=%.2f, y=%.2f",
                     nearest_gate_pos1.first, nearest_gate_pos1.second);
@@ -323,12 +314,11 @@ private:
         std::vector<std::pair<double, double>> wps_pos2;
         wps_pos2.emplace_back(p2.x, p2.y);
         wps_pos2.emplace_back(nearest_gate_pos2.first, nearest_gate_pos2.second);
-        // step:
 
         nav_msgs::msg::Path path1;
         nav_msgs::msg::Path path2;
 
-        // check if the path is a straight line (no obstacles in between)
+        // 1) check if the path is a straight line (no obstacles in between)
         bool is_linear_1 = linear_gen_.is_direct_path_feasible(wps_pos1.front(), wps_pos1.back(), last_obstacles_, last_arena_);
         bool is_linear_2 = linear_gen_.is_direct_path_feasible(wps_pos2.front(), wps_pos2.back(), last_obstacles_, last_arena_);
         if (is_linear_1)
@@ -342,6 +332,7 @@ private:
             path2 = linear_gen_.generate(wps_pos2, last_obstacles_, last_arena_);
         }
 
+        // 3) implement PRM only if at least one path is not linear 
         if (!is_linear_1 || !is_linear_2)
         {
             // 1) Sample random points for PRM
@@ -351,41 +342,66 @@ private:
             // 2) Build k-NN edges
             RCLCPP_INFO(this->get_logger(), "Building k-NN edges...");
             path_gen_.build_knn_edges(last_obstacles_, last_arena_, 7, 0.15, 0.1);
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            visualizer_.vis_random_points_markers(path_gen_.random_points);
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            visualizer_.vis_knn_edges_markers(path_gen_.random_points, path_gen_.knn_adj);
         }
 
-        // 3) Genera path con step di 0.1 m e frame "map"
-        RCLCPP_INFO(this->get_logger(), "Generating paths...");
-        if (!is_linear_1)
+        // 4) Generate patjc with step of 0.1 m and frame "map"
+        RCLCPP_INFO(this->get_logger(), "Generating path for Robot 1 and 2...");
+        try
         {
-            path1 = path_gen_.generate(wps_pos1, last_obstacles_, last_arena_);
+            if (!is_linear_1)
+            {
+                path1 = path_gen_.generate(wps_pos1, last_obstacles_, last_arena_);
+            }
+            if (!is_linear_2)
+            {
+                path2 = path_gen_.generate(wps_pos2, last_obstacles_, last_arena_);
+            }
+            if (!path1.poses.empty())
+            {
+                RCLCPP_INFO(this->get_logger(), "Path generate for Robot 1: %zu waypoints", path1.poses.size());
+            }
+
+            if (!path2.poses.empty())
+            {
+                RCLCPP_INFO(this->get_logger(), "Path generate for Robot 2: %zu waypoints", path2.poses.size());
+            }
+            else if (path1.poses.empty())
+            {
+                RCLCPP_ERROR(this->get_logger(), "NO path for Robot 1");
+            }
+            else if (path2.poses.empty())
+            {
+                RCLCPP_ERROR(this->get_logger(), "NO path for Robot 2");
+            }
         }
-        if (!is_linear_2)
+        catch (const std::exception &e)
         {
-            path2 = path_gen_.generate(wps_pos2, last_obstacles_, last_arena_);
+            RCLCPP_ERROR(this->get_logger(), "Error to generate the path for robots: %s", e.what());
+            path1 = nav_msgs::msg::Path(); // Path vuoto
+            path1.header.frame_id = "map";
+            path1.header.stamp = this->get_clock()->now();
         }
 
-        // Verifica connessioni prima di pubblicare (con timeout breve)
+        // 5) check for subscribers before publishing
         wait_for_subscribers(1);
-        // Pubblicazione robusta con delay tra i messaggi
+
+        // 6) ===== PATH PUBLICATION =====
         RCLCPP_INFO(this->get_logger(), "Publishing paths...");
 
         publish_path_with_retry(pub_path_pos1_, path1, "path pos1->gates");
-
-        // Delay tra pubblicazioni per evitare congestione
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
-
         publish_path_with_retry(pub_path_pos2_, path2, "path pos2->gates");
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        visualizer_.vis_random_points_markers(path_gen_.random_points);
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        visualizer_.vis_knn_edges_markers(path_gen_.random_points, path_gen_.knn_adj);
 
         RCLCPP_INFO(this->get_logger(), "=== Path planning completed ===");
     }
 
-    // ===== Member variables =====
+    
     rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr client_re_mapping_trigger;
     rclcpp::TimerBase::SharedPtr init_timer_;
     rclcpp::TimerBase::SharedPtr connection_timer_;
@@ -413,7 +429,6 @@ private:
 
     planning_pkg::PrmPathGenerator path_gen_;
     planning_pkg::LinearPathGenerator linear_gen_;
-
     planning_pkg::VisualizationUtils visualizer_;
 };
 

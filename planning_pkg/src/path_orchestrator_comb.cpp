@@ -3,9 +3,9 @@
 #include <vector>
 #include <string>
 #include <cmath>
-#include <utility>  
+#include <utility>
 #include <algorithm>
-#include <thread>   
+#include <thread>
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_srvs/srv/trigger.hpp"
@@ -24,6 +24,7 @@
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
 #include "planning_pkg/common.hpp"
+#include "planning_pkg/common_function.hpp"
 #include "planning_pkg/comb_path.hpp"
 #include "planning_pkg/linear_path.hpp"
 #include "planning_pkg/visualizer_rviz.hpp"
@@ -218,7 +219,7 @@ private:
         for (size_t i = 0; i < last_gates_.poses.size(); ++i)
         {
             const auto &p = last_gates_.poses[i];
-            const double yaw = yaw_from_quat_(p.orientation);
+            const double yaw = planning_pkg::CommonFunction::yaw_from_quat_(p.orientation);
             RCLCPP_INFO(this->get_logger(), "Gate %zu -> x=%.3f, y=%.3f, yaw=%.3f",
                         i, p.position.x, p.position.y, yaw);
         }
@@ -233,7 +234,7 @@ private:
         got_pos1_ = true;
 
         const auto &p = last_pos1_.pose.pose;
-        const double yaw = yaw_from_quat_(p.orientation);
+        const double yaw = planning_pkg::CommonFunction::yaw_from_quat_(p.orientation);
         RCLCPP_INFO(this->get_logger(), "Received Pos1 -> x=%.3f, y=%.3f, yaw=%.3f",
                     p.position.x, p.position.y, yaw);
 
@@ -247,21 +248,12 @@ private:
         got_pos2_ = true;
 
         const auto &p = last_pos2_.pose.pose;
-        const double yaw = yaw_from_quat_(p.orientation);
+        const double yaw = planning_pkg::CommonFunction::yaw_from_quat_(p.orientation);
         RCLCPP_INFO(this->get_logger(), "Received Pos2 -> x=%.3f, y=%.3f, yaw=%.3f",
                     p.position.x, p.position.y, yaw);
 
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         path_planning();
-    }
-
-    // methods from quaternion to RPY --> nav2 accetta un path con orientamento in RPY
-    static double yaw_from_quat_(const geometry_msgs::msg::Quaternion &qmsg)
-    {
-        tf2::Quaternion q(qmsg.x, qmsg.y, qmsg.z, qmsg.w);
-        double r, p, y;
-        tf2::Matrix3x3(q).getRPY(r, p, y);
-        return y;
     }
 
     std::pair<double, double> find_nearest_gate(const geometry_msgs::msg::Point &pos, const geometry_msgs::msg::PoseArray &gates)
@@ -301,7 +293,8 @@ private:
         RCLCPP_INFO(this->get_logger(), "=== Starting path planning ===");
         const auto &p1 = last_pos1_.pose.pose.position;
         const auto &p2 = last_pos2_.pose.pose.position;
-        // step0: find nearest gate for each robot
+
+        // 0) find nearest gate for each robot
         const auto nearest_gate_pos1 = find_nearest_gate(p1, last_gates_);
         RCLCPP_INFO(this->get_logger(), "Nearest gate for Robot 1: x=%.2f, y=%.2f",
                     nearest_gate_pos1.first, nearest_gate_pos1.second);
@@ -318,8 +311,8 @@ private:
 
         nav_msgs::msg::Path path1;
         nav_msgs::msg::Path path2;
-
-        // check if the path is a straight line (no obstacles in between)
+        
+        // 1) check if the path is a straight line (no obstacles in between)
         bool is_linear_1 = linear_gen_.is_direct_path_feasible(wps_pos1.front(), wps_pos1.back(), last_obstacles_, last_arena_);
         bool is_linear_2 = linear_gen_.is_direct_path_feasible(wps_pos2.front(), wps_pos2.back(), last_obstacles_, last_arena_);
         if (is_linear_1)
@@ -333,40 +326,45 @@ private:
             path2 = linear_gen_.generate(wps_pos2, last_obstacles_, last_arena_);
         }
 
-        // ===== visuallizer part =====
-        std::vector<std::pair<double, double>> points_line;
-        std::vector<std::pair<double, double>> points_centroids;
-        std::vector<std::pair<double, double>> points = path_gen_.get_pointlist(last_obstacles_, last_arena_);
-        std::vector<planning_pkg::HorizontalLine> horizontal_lines = path_gen_.get_horizontal_lines(last_obstacles_, last_arena_);
-
-        for (const auto &line : horizontal_lines)
+        // 4) implement COMB only if at least one path is not linear
+        if (!is_linear_1 || !is_linear_2)
         {
-            auto line_points = path_gen_.set_point_in_vertical_line(line, 1.0);
-            points_line.insert(points_line.end(), line_points.begin(), line_points.end());
-        }
-        std::vector<planning_pkg::Cell> cells = path_gen_.get_cells_btw_vlines(horizontal_lines);
-        for (const auto &cell : cells)
-        {
-            auto centroid = path_gen_.get_cell_centroid(cell);
-            points_centroids.push_back(centroid);
-        }
-        std::vector<std::vector<int>> arc_list = path_gen_.get_arc(horizontal_lines, points_line, points_centroids);
-        vertical_lines_data_.clear();
-        for (const auto &line : horizontal_lines)
-        {
-            vertical_lines_data_.emplace_back(
-                line.y,
-                0.0, // z coordinate (sempre 0 per linee orizzontali)
-                std::make_pair(line.x_start, line.y),
-                std::make_pair(line.x_end, line.y));
+
+            // ===== visuallizer part =====
+            std::vector<std::pair<double, double>> points_line;
+            std::vector<std::pair<double, double>> points_centroids;
+            std::vector<std::pair<double, double>> points = path_gen_.get_pointlist(last_obstacles_, last_arena_);
+            std::vector<planning_pkg::HorizontalLine> horizontal_lines = path_gen_.get_horizontal_lines(last_obstacles_, last_arena_);
+
+            for (const auto &line : horizontal_lines)
+            {
+                auto line_points = path_gen_.set_point_in_vertical_line(line, 1.0);
+                points_line.insert(points_line.end(), line_points.begin(), line_points.end());
+            }
+            std::vector<planning_pkg::Cell> cells = path_gen_.get_cells_btw_vlines(horizontal_lines);
+            for (const auto &cell : cells)
+            {
+                auto centroid = path_gen_.get_cell_centroid(cell);
+                points_centroids.push_back(centroid);
+            }
+            std::vector<std::vector<int>> arc_list = path_gen_.get_arc(horizontal_lines, points_line, points_centroids);
+            vertical_lines_data_.clear();
+            for (const auto &line : horizontal_lines)
+            {
+                vertical_lines_data_.emplace_back(
+                    line.y,
+                    0.0, // z coordinate (sempre 0 per linee orizzontali)
+                    std::make_pair(line.x_start, line.y),
+                    std::make_pair(line.x_end, line.y));
+            }
+
+            visualizer_.vis_points(points_centroids); // "points_centroids" or "points_line" or "points"
+            visualizer_.vis_line();
+            visualizer_.vis_cells(cells);
+            visualizer_.vis_arcs(arc_list, points_line, points_centroids);
         }
 
-        visualizer_.vis_points(points_centroids); // "points_centroids" or "points_line" or "points"
-        visualizer_.vis_line();
-        visualizer_.vis_cells(cells);
-        visualizer_.vis_arcs(arc_list, points_line, points_centroids);
-
-        // ===== generation path =====
+        // 4) Generate patjc with step of 0.1 m and frame "map"
         RCLCPP_INFO(this->get_logger(), "Generating path for Robot 1 and 2...");
         try
         {
@@ -405,28 +403,19 @@ private:
             path1.header.stamp = this->get_clock()->now();
         }
 
-        // Verifica connessioni prima di pubblicare (con timeout breve)
+        // 5) check for subscribers before publishing
         wait_for_subscribers(1);
 
-        // ===== PUBBLICAZIONE PATH =====
+        // 6) ===== PATH PUBLICATION =====
         RCLCPP_INFO(this->get_logger(), "Publishing paths...");
 
-        // Pubblica path per Robot 1
         publish_path_with_retry(pub_path_pos1_, path1, "path_pos1_to_gates");
-
-        // Delay tra pubblicazioni per evitare congestione
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
-
-        // Pubblica path per Robot 2
         publish_path_with_retry(pub_path_pos2_, path2, "path_pos2_to_gates");
 
         RCLCPP_INFO(this->get_logger(), "=== Path planning completed ===");
     }
-    static std::pair<double, double> xy_from_(const geometry_msgs::msg::Point &p) { return {p.x, p.y}; }
-    static std::pair<double, double> xy_from_(const geometry_msgs::msg::Pose &p) { return {p.position.x, p.position.y}; }
-    template <typename A, typename B>
-    static std::pair<double, double> xy_from_(const std::pair<A, B> &p) { return {static_cast<double>(p.first), static_cast<double>(p.second)}; }
-    // ===== Members =====
+
     rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr client_re_mapping_trigger;
     rclcpp::TimerBase::SharedPtr init_timer_;
     rclcpp::TimerBase::SharedPtr connection_timer_;
@@ -457,6 +446,11 @@ private:
     planning_pkg::LinearPathGenerator linear_gen_;
     planning_pkg::VisualizationUtils visualizer_;
     std::vector<std::tuple<double, double, std::pair<double, double>, std::pair<double, double>>> vertical_lines_data_;
+    static std::pair<double, double> xy_from_(const geometry_msgs::msg::Point &p) { return {p.x, p.y}; }
+    static std::pair<double, double> xy_from_(const geometry_msgs::msg::Pose &p) { return {p.position.x, p.position.y}; }
+    template <typename A, typename B>
+    static std::pair<double, double> xy_from_(const std::pair<A, B> &p) { return {static_cast<double>(p.first), static_cast<double>(p.second)}; }
+    
 };
 
 int main(int argc, char **argv)
