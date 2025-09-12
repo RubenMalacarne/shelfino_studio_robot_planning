@@ -75,7 +75,7 @@ namespace planning_pkg
         std::vector<std::pair<double, double>> points_line;
         for (const auto &line : horizontal_lines)
         {
-            auto line_points = set_point_in_vertical_line(line, 1.0);
+            auto line_points = set_point_in_vertical_line(line, 0.2);
             points_line.insert(points_line.end(), line_points.begin(), line_points.end());
         }
 
