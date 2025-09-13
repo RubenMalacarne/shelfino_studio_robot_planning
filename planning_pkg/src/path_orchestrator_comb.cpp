@@ -323,8 +323,8 @@ private:
         bool is_linear_1 = linear_gen_.is_direct_path_feasible(wps_pos1.front(), wps_pos1.back(), last_obstacles_, last_arena_);
         bool is_linear_2 = linear_gen_.is_direct_path_feasible(wps_pos2.front(), wps_pos2.back(), last_obstacles_, last_arena_);
         
-        is_linear_1 = false; // FORZATURA PER TESTING COMB
-        is_linear_2 = false; // FORZATURA PER TESTING COMB
+        // is_linear_1 = false; // FORZATURA PER TESTING COMB
+        // is_linear_2 = false; // FORZATURA PER TESTING COMB
         
         if (is_linear_1)
         {
