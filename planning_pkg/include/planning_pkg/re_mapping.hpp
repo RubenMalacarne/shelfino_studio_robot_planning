@@ -47,7 +47,6 @@ public:
         return this->get_parameter("marker_frame").as_string();
     }
 
-
     // Set
     void set_pos(pose_t& pos, const geometry_msgs::msg::PoseWithCovarianceStamped& msg);
     void set_obstacles(const obstacles_msgs::msg::ObstacleArrayMsg &msg);
@@ -56,7 +55,7 @@ public:
     
     // Map values
     std::vector<pose_t> gates;
-    double distance_ahead = 0.5;
+    double distance_ahead = 0.0;
     // Position storage
     pose_t pos1;
     pose_t pos2;
@@ -91,7 +90,7 @@ private:
   void callback_pos2(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg);
   
   // Service callback
-  void on_trigger(
+  void callback_trigger(
     const std::shared_ptr<std_srvs::srv::Trigger::Request>,
     std::shared_ptr<std_srvs::srv::Trigger::Response> res); 
   

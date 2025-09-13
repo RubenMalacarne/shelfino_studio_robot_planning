@@ -21,6 +21,7 @@ find_package(nav2_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
+find_package(ament_cmake_python REQUIRED)  
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
@@ -30,6 +31,13 @@ install(DIRECTORY
 
 install(DIRECTORY include/
   DESTINATION include
+)
+
+# Install python node for ros2 run
+install(PROGRAMS
+  planning_pkg/cell_decomposition.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME cell_decomposition
 )
 
 if(BUILD_TESTING)
@@ -48,10 +56,17 @@ add_library(linear_path
   src/algo_path_planning/linear_path.cpp
 )
 
-add_executable(main_base
-  src/main_base.cpp
+add_library(prm_path
+  src/algo_path_planning/prm_path.cpp
 )
 
+add_library(comb_path
+  src/algo_path_planning/comb_path.cpp
+)
+
+add_library(visualizer_rviz
+  src/utils/visualizer_rviz.cpp
+)
 add_executable(re_mapping
   src/utils/re_mapping.cpp
 )
@@ -60,12 +75,30 @@ add_executable(nav2_pathclient
   src/utils/nav2_pathclient.cpp
 )
 
-add_executable(dubins_service
-  src/utils/dubins_service.cpp
+add_executable(smooth_converter
+  src/utils/smooth_converter.cpp
 )
 
-add_executable(path_orchestrator
-  src/path_orchestrator.cpp
+
+add_executable(dubins_curve_converter
+  src/utils/dubins_curve_converter.cpp
+  src/utils/dubins_curve.cpp
+)
+
+add_executable(path_orchestrator_prm 
+  src/path_orchestrator_prm.cpp
+  src/algo_path_planning/prm_path.cpp
+  src/algo_path_planning/linear_path.cpp
+  src/utils/visualizer_rviz.cpp
+  src/algo_path_planning/common_function.cpp 
+)
+
+add_executable(path_orchestrator_comb
+  src/path_orchestrator_comb.cpp
+  src/algo_path_planning/comb_path.cpp
+  src/algo_path_planning/linear_path.cpp
+  src/utils/visualizer_rviz.cpp
+  src/algo_path_planning/common_function.cpp 
 )
 
 ament_target_dependencies(linear_path
@@ -74,15 +107,26 @@ ament_target_dependencies(linear_path
   geometry_msgs
   tf2
   tf2_geometry_msgs
+  obstacles_msgs
 )
 
-ament_target_dependencies(main_base
+ament_target_dependencies(prm_path
   rclcpp
-  geometry_msgs
   nav_msgs
+  geometry_msgs
   tf2
   tf2_geometry_msgs
-  obstacles_msgs
+  obstacles_msgs  
+)
+
+
+ament_target_dependencies(comb_path
+  rclcpp
+  nav_msgs
+  geometry_msgs
+  tf2
+  tf2_geometry_msgs
+  obstacles_msgs  
 )
 
 ament_target_dependencies(re_mapping
@@ -94,26 +138,27 @@ ament_target_dependencies(re_mapping
   std_srvs
 )
 
-ament_target_dependencies(dubins_service 
-  rclcpp 
-  std_srvs
-  geometry_msgs
-)
 
-ament_target_dependencies(path_orchestrator 
+ament_target_dependencies(path_orchestrator_prm 
   rclcpp 
   std_srvs
-  geometry_msgs
   visualization_msgs
-  obstacles_msgs
+  geometry_msgs
   nav_msgs
-  nav2_msgs
+  obstacles_msgs
   tf2
-  tf2_ros
   tf2_geometry_msgs
 )
-target_link_libraries(path_orchestrator linear_path)
-
+ament_target_dependencies(path_orchestrator_comb 
+  rclcpp 
+  std_srvs
+  visualization_msgs
+  geometry_msgs
+  nav_msgs
+  obstacles_msgs
+  tf2
+  tf2_geometry_msgs
+)
 
 ament_target_dependencies(nav2_pathclient
   rclcpp
@@ -127,22 +172,57 @@ ament_target_dependencies(nav2_pathclient
   visualization_msgs
   obstacles_msgs
 )
-target_include_directories(main_base PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+ament_target_dependencies(smooth_converter
+  rclcpp
+  nav_msgs
+  geometry_msgs
+  tf2
+  tf2_geometry_msgs
+  std_srvs
+)
+
+ament_target_dependencies(dubins_curve_converter
+  rclcpp
+  nav_msgs
+  geometry_msgs
+  tf2
+  tf2_geometry_msgs
+  obstacles_msgs
+  std_srvs
+)
+ament_target_dependencies(visualizer_rviz
+  rclcpp
+  geometry_msgs
+  visualization_msgs
+  nav_msgs 
+  obstacles_msgs
+)
+
 target_include_directories(re_mapping PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(nav2_pathclient PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_include_directories(dubins_service PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_include_directories(path_orchestrator PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(path_orchestrator_prm PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(path_orchestrator_comb PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(linear_path PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-
+target_include_directories(comb_path PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(smooth_converter PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(dubins_curve_converter PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(prm_path PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(visualizer_rviz PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 
 install(TARGETS
-main_base
 re_mapping
 nav2_pathclient
-dubins_service
-path_orchestrator
+path_orchestrator_prm
+path_orchestrator_comb
 linear_path
+prm_path
+linear_path
+comb_path
+dubins_curve_converter
+smooth_converter
+visualizer_rviz
 DESTINATION lib/${PROJECT_NAME}
 )
 
