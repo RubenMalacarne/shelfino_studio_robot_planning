@@ -299,6 +299,8 @@ private:
             RCLCPP_WARN(this->get_logger(), "Connections not ready yet, proceeding anyway...");
         }
 
+        auto start_time = std::chrono::high_resolution_clock::now();
+
         RCLCPP_INFO(this->get_logger(), "=== Starting path planning ===");
 
         const auto &p1 = last_pos1_.pose.pose.position;
@@ -399,6 +401,11 @@ private:
 
         // 6) ===== PATH PUBLICATION =====
         RCLCPP_INFO(this->get_logger(), "Publishing paths...");
+
+        // 7) execution time
+        auto end_time = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+        RCLCPP_INFO(this->get_logger(), "Path planning execution time: %ld ms", duration.count());
 
         publish_path_with_retry(pub_path_pos1_, path1, "path pos1->gates");
         std::this_thread::sleep_for(std::chrono::milliseconds(50));

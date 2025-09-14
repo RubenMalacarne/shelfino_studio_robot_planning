@@ -354,6 +354,8 @@ private:
         const std::vector<geometry_msgs::msg::PoseStamped> &waypoints,
         const std::string &frame_id)
     {
+        
+        auto start_time = std::chrono::high_resolution_clock::now();
         nav_msgs::msg::Path dubins_path;
         dubins_path.header.frame_id = frame_id;
         dubins_path.header.stamp = get_clock()->now();
@@ -414,6 +416,10 @@ private:
             pose_stamped.pose.orientation = quaternion_from_yaw(yaw);
             dubins_path.poses.push_back(pose_stamped);
         }
+
+        auto end_time = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+        RCLCPP_INFO(get_logger(), "Dubins path generation execution time: %ld ms", duration.count());
 
         return dubins_path;
     }
