@@ -2,6 +2,8 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <queue>
+#include <chrono>
 
 namespace planning_pkg
 {
@@ -375,5 +377,295 @@ namespace planning_pkg
 
         std::reverse(path.begin(), path.end());
         return path;
+    }
+
+    std::vector<int> CommonFunction::astar_shortest_path_temp(
+        int start, int goal,
+        const std::vector<geometry_msgs::msg::Point> &points,
+        const std::vector<std::vector<int>> &adjacency)
+    {
+        if (start == goal)
+            return {start};
+
+        const size_t N = points.size();
+        if (start < 0 || goal < 0 || static_cast<size_t>(start) >= N || static_cast<size_t>(goal) >= N)
+        {
+            return {};
+        }
+
+        // Heuristic function (Euclidean distance to goal)
+        auto heuristic = [&](int node) -> double {
+            return std::sqrt(CommonFunction::dist2(points[node], points[goal]));
+        };
+
+        // Priority queue: (f_cost, node_id)
+        std::priority_queue<std::pair<double, int>, std::vector<std::pair<double, int>>, std::greater<std::pair<double, int>>> open_set;
+        
+        // Data structures
+        std::vector<double> g_cost(N, std::numeric_limits<double>::infinity());
+        std::vector<double> f_cost(N, std::numeric_limits<double>::infinity());
+        std::vector<int> prev(N, -1);
+        std::vector<bool> in_open_set(N, false);
+        std::vector<bool> in_closed_set(N, false);
+
+        // Initialize start node
+        g_cost[start] = 0.0;
+        f_cost[start] = heuristic(start);
+        open_set.push({f_cost[start], start});
+        in_open_set[start] = true;
+
+        while (!open_set.empty())
+        {
+            auto [current_f, current] = open_set.top();
+            open_set.pop();
+            
+            if (in_closed_set[current])
+                continue;
+                
+            in_open_set[current] = false;
+            in_closed_set[current] = true;
+
+            if (current == goal)
+                break;
+
+            for (int neighbor : adjacency[current])
+            {
+                if (in_closed_set[neighbor])
+                    continue;
+
+                double tentative_g = g_cost[current] + std::sqrt(CommonFunction::dist2(points[current], points[neighbor]));
+                
+                if (tentative_g < g_cost[neighbor])
+                {
+                    prev[neighbor] = current;
+                    g_cost[neighbor] = tentative_g;
+                    f_cost[neighbor] = g_cost[neighbor] + heuristic(neighbor);
+                    
+                    if (!in_open_set[neighbor])
+                    {
+                        open_set.push({f_cost[neighbor], neighbor});
+                        in_open_set[neighbor] = true;
+                    }
+                }
+            }
+        }
+
+        // Reconstruct path
+        std::vector<int> path;
+        for (int at = goal; at != -1; at = prev[at])
+        {
+            path.push_back(at);
+        }
+
+        if (path.empty() || path.back() != start)
+        {
+            return {}; // No path found
+        }
+
+        std::reverse(path.begin(), path.end());
+        return path;
+    }
+
+    CommonFunction::PathFindingResult CommonFunction::test_dijkstra_performance(
+        int start, int goal,
+        const std::vector<geometry_msgs::msg::Point> &points,
+        const std::vector<std::vector<int>> &adjacency)
+    {
+        PathFindingResult result;
+        result.success = false;
+        
+        auto start_time = std::chrono::high_resolution_clock::now();
+        
+        if (start == goal)
+        {
+            result.path = {start};
+            result.success = true;
+            result.nodes_explored = 1;
+            result.path_cost = 0.0;
+        }
+        else
+        {
+            const size_t N = points.size();
+            if (start < 0 || goal < 0 || static_cast<size_t>(start) >= N || static_cast<size_t>(goal) >= N)
+            {
+                auto end_time = std::chrono::high_resolution_clock::now();
+                result.execution_time_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+                return result;
+            }
+
+            std::vector<double> dist(N, std::numeric_limits<double>::infinity());
+            std::vector<int> prev(N, -1);
+            std::vector<bool> visited(N, false);
+            int nodes_explored = 0;
+
+            dist[start] = 0.0;
+
+            for (size_t count = 0; count < N; ++count)
+            {
+                int u = -1;
+                for (size_t v = 0; v < N; ++v)
+                {
+                    if (!visited[v] && (u == -1 || dist[v] < dist[u]))
+                    {
+                        u = static_cast<int>(v);
+                    }
+                }
+
+                if (u == -1 || dist[u] == std::numeric_limits<double>::infinity())
+                    break;
+
+                visited[u] = true;
+                nodes_explored++;
+
+                if (u == goal)
+                    break;
+
+                for (int v : adjacency[u])
+                {
+                    if (!visited[v])
+                    {
+                        double weight = std::sqrt(CommonFunction::dist2(points[u], points[v]));
+                        double alt = dist[u] + weight;
+                        if (alt < dist[v])
+                        {
+                            dist[v] = alt;
+                            prev[v] = u;
+                        }
+                    }
+                }
+            }
+
+            // Reconstruct path
+            std::vector<int> path;
+            for (int at = goal; at != -1; at = prev[at])
+            {
+                path.push_back(at);
+            }
+
+            if (!path.empty() && path.back() == start)
+            {
+                std::reverse(path.begin(), path.end());
+                result.path = path;
+                result.success = true;
+                result.path_cost = dist[goal];
+            }
+            
+            result.nodes_explored = nodes_explored;
+        }
+
+        auto end_time = std::chrono::high_resolution_clock::now();
+        result.execution_time_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+        
+        return result;
+    }
+
+    CommonFunction::PathFindingResult CommonFunction::test_astar_performance(
+        int start, int goal,
+        const std::vector<geometry_msgs::msg::Point> &points,
+        const std::vector<std::vector<int>> &adjacency)
+    {
+        PathFindingResult result;
+        result.success = false;
+        
+        auto start_time = std::chrono::high_resolution_clock::now();
+        
+        if (start == goal)
+        {
+            result.path = {start};
+            result.success = true;
+            result.nodes_explored = 1;
+            result.path_cost = 0.0;
+        }
+        else
+        {
+            const size_t N = points.size();
+            if (start < 0 || goal < 0 || static_cast<size_t>(start) >= N || static_cast<size_t>(goal) >= N)
+            {
+                auto end_time = std::chrono::high_resolution_clock::now();
+                result.execution_time_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+                return result;
+            }
+
+            // Heuristic function (Euclidean distance to goal)
+            auto heuristic = [&](int node) -> double {
+                return std::sqrt(CommonFunction::dist2(points[node], points[goal]));
+            };
+
+            // Priority queue: (f_cost, node_id)
+            std::priority_queue<std::pair<double, int>, std::vector<std::pair<double, int>>, std::greater<std::pair<double, int>>> open_set;
+            
+            // Data structures
+            std::vector<double> g_cost(N, std::numeric_limits<double>::infinity());
+            std::vector<double> f_cost(N, std::numeric_limits<double>::infinity());
+            std::vector<int> prev(N, -1);
+            std::vector<bool> in_open_set(N, false);
+            std::vector<bool> in_closed_set(N, false);
+            int nodes_explored = 0;
+
+            // Initialize start node
+            g_cost[start] = 0.0;
+            f_cost[start] = heuristic(start);
+            open_set.push({f_cost[start], start});
+            in_open_set[start] = true;
+
+            while (!open_set.empty())
+            {
+                auto [current_f, current] = open_set.top();
+                open_set.pop();
+                
+                if (in_closed_set[current])
+                    continue;
+                    
+                in_open_set[current] = false;
+                in_closed_set[current] = true;
+                nodes_explored++;
+
+                if (current == goal)
+                    break;
+
+                for (int neighbor : adjacency[current])
+                {
+                    if (in_closed_set[neighbor])
+                        continue;
+
+                    double tentative_g = g_cost[current] + std::sqrt(CommonFunction::dist2(points[current], points[neighbor]));
+                    
+                    if (tentative_g < g_cost[neighbor])
+                    {
+                        prev[neighbor] = current;
+                        g_cost[neighbor] = tentative_g;
+                        f_cost[neighbor] = g_cost[neighbor] + heuristic(neighbor);
+                        
+                        if (!in_open_set[neighbor])
+                        {
+                            open_set.push({f_cost[neighbor], neighbor});
+                            in_open_set[neighbor] = true;
+                        }
+                    }
+                }
+            }
+
+            // Reconstruct path
+            std::vector<int> path;
+            for (int at = goal; at != -1; at = prev[at])
+            {
+                path.push_back(at);
+            }
+
+            if (!path.empty() && path.back() == start)
+            {
+                std::reverse(path.begin(), path.end());
+                result.path = path;
+                result.success = true;
+                result.path_cost = g_cost[goal];
+            }
+            
+            result.nodes_explored = nodes_explored;
+        }
+
+        auto end_time = std::chrono::high_resolution_clock::now();
+        result.execution_time_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+        
+        return result;
     }
 }

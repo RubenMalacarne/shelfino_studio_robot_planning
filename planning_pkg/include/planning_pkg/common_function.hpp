@@ -58,7 +58,31 @@ namespace planning_pkg
             const std::vector<geometry_msgs::msg::Point> &points,
             const std::vector<std::vector<int>> &adjacency);
 
+        static std::vector<int> astar_shortest_path_temp(
+            int start, int goal,
+            const std::vector<geometry_msgs::msg::Point> &points,
+            const std::vector<std::vector<int>> &adjacency);
+
         static double yaw_from_quat_(const geometry_msgs::msg::Quaternion &qmsg);
+
+        // Performance testing structures
+        struct PathFindingResult {
+            std::vector<int> path;
+            double execution_time_ms;
+            int nodes_explored;
+            double path_cost;
+            bool success;
+        };
+
+        static PathFindingResult test_dijkstra_performance(
+            int start, int goal,
+            const std::vector<geometry_msgs::msg::Point> &points,
+            const std::vector<std::vector<int>> &adjacency);
+
+        static PathFindingResult test_astar_performance(
+            int start, int goal,
+            const std::vector<geometry_msgs::msg::Point> &points,
+            const std::vector<std::vector<int>> &adjacency);
 
     private:
         static inline double sqr(double v) { return v * v; }

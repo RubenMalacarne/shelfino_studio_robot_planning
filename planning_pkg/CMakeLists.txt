@@ -64,6 +64,14 @@ add_library(comb_path
   src/algo_path_planning/comb_path.cpp
 )
 
+add_library(rrt_path
+  src/algo_path_planning/rrt_path.cpp
+)
+
+add_library(multiagent_astar
+  src/algo_path_planning/multiagent_astar.cpp
+)
+
 add_library(visualizer_rviz
   src/utils/visualizer_rviz.cpp
 )
@@ -101,6 +109,15 @@ add_executable(path_orchestrator_comb
   src/algo_path_planning/common_function.cpp 
 )
 
+add_executable(path_orchestrator_rrt
+  src/path_orchestrator_rrt.cpp
+  src/algo_path_planning/rrt_path.cpp
+  src/algo_path_planning/multiagent_astar.cpp
+  src/algo_path_planning/linear_path.cpp
+  src/utils/visualizer_rviz.cpp
+  src/algo_path_planning/common_function.cpp 
+)
+
 ament_target_dependencies(linear_path
   rclcpp
   nav_msgs
@@ -121,6 +138,24 @@ ament_target_dependencies(prm_path
 
 
 ament_target_dependencies(comb_path
+  rclcpp
+  nav_msgs
+  geometry_msgs
+  tf2
+  tf2_geometry_msgs
+  obstacles_msgs  
+)
+
+ament_target_dependencies(rrt_path
+  rclcpp
+  nav_msgs
+  geometry_msgs
+  tf2
+  tf2_geometry_msgs
+  obstacles_msgs  
+)
+
+ament_target_dependencies(multiagent_astar
   rclcpp
   nav_msgs
   geometry_msgs
@@ -150,6 +185,17 @@ ament_target_dependencies(path_orchestrator_prm
   tf2_geometry_msgs
 )
 ament_target_dependencies(path_orchestrator_comb 
+  rclcpp 
+  std_srvs
+  visualization_msgs
+  geometry_msgs
+  nav_msgs
+  obstacles_msgs
+  tf2
+  tf2_geometry_msgs
+)
+
+ament_target_dependencies(path_orchestrator_rrt 
   rclcpp 
   std_srvs
   visualization_msgs
@@ -203,8 +249,11 @@ target_include_directories(re_mapping PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
 target_include_directories(nav2_pathclient PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(path_orchestrator_prm PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(path_orchestrator_comb PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(path_orchestrator_rrt PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(linear_path PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(comb_path PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(rrt_path PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(multiagent_astar PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(smooth_converter PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(dubins_curve_converter PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(prm_path PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -216,10 +265,12 @@ re_mapping
 nav2_pathclient
 path_orchestrator_prm
 path_orchestrator_comb
+path_orchestrator_rrt
 linear_path
 prm_path
-linear_path
 comb_path
+rrt_path
+multiagent_astar
 dubins_curve_converter
 smooth_converter
 visualizer_rviz
