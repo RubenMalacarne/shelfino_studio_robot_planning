@@ -1,95 +1,97 @@
 name: Build and Compile ROS2 workspace
-
+#add git actions
 on:
   push:
-    branches: [ main ]
+    branches: [ main]
   pull_request:
     branches: [ main ]
 
 jobs:
-  build:
+  ROS_CI:
     runs-on: ubuntu-latest
-    strategy:
+    strategy: 
       fail-fast: false
       matrix:
-        ros_distro: [ humble ]
-        include:
-          - ros_distro: humble
-            docker_image: osrf/ros:humble-desktop-full
+        ros2_distribution:
+          - humble
 
+        include: 
+          - docker_image: osrf/ros:humble-desktop-full
+            ros_distribution: humble
+            ros_version: 2
+    
     container:
-      image: ${{ matrix.docker_image }}
-
+        image: ${{ matrix.docker_image }}
+    
     steps:
-      - name: Prep workspace
+      - name: Setup workspace
         run: mkdir -p ros_ws/src
 
-      - name: Checkout
+      - name: Install system dependencies
+        run: |
+          apt-get update && apt-get install -y \
+            software-properties-common \
+            python3-pip \
+            python3-colcon-common-extensions \
+            nano \
+            sudo \
+            libpcl-dev \
+            ros-humble-slam-toolbox \
+            ros-humble-teleop-twist-joy \
+            ros-humble-teleop-twist-keyboard \
+            ros-humble-twist-mux \
+            ros-humble-joint-state-publisher-gui \
+            ros-humble-xacro \
+            ros-humble-navigation2 \
+            ros-humble-nav2-bringup \
+            ros-humble-turtlebot3* \
+            ros-humble-gazebo-* \
+            ros-humble-ros-gz* \
+            ros-humble-gazebo-ros-pkgs \
+            ros-humble-ros2-control \
+            ros-humble-robot-state-publisher \
+            ros-humble-gazebo-ros2-control \
+            ros-humble-ros2-controllers \
+            ros-humble-topic-tools && \
+            rm -rf /var/lib/apt/lists/*
+
+      - name: Install Python packages
+        run: |
+          pip3 install pyserial flask flask-ask-sdk ask-sdk xmlschema pyyaml shapely notebook
+
+      - name: Checkout code and setup workspace
         uses: actions/checkout@v4
         with:
           path: ros_ws/src
 
-      - name: Git auth (opzionale)
-        if: secrets.GH_TOKEN != ''
+      - name: Setup git credentials
         run: |
           git config --global url."https://${{ secrets.GH_TOKEN }}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
 
-      - name: Install system deps
+      - name: Setup ROS environment
+        uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: ${{ matrix.ros_distribution }}
+      
+      - name: Initialize rosdep
         run: |
-            apt-get update
-            apt-get install -y \
-              python3-pip \
-              python3-colcon-common-extensions \
-              libpcl-dev \
-              ros-${{ matrix.ros_distro }}-slam-toolbox \
-              ros-${{ matrix.ros_distro }}-teleop-twist-joy \
-              ros-${{ matrix.ros_distro }}-teleop-twist-keyboard \
-              ros-${{ matrix.ros_distro }}-twist-mux \
-              ros-${{ matrix.ros_distro }}-joint-state-publisher-gui \
-              ros-${{ matrix.ros_distro }}-xacro \
-              ros-${{ matrix.ros_distro }}-navigation2 \
-              ros-${{ matrix.ros_distro }}-nav2-bringup \
-              ros-${{ matrix.ros_distro }}-turtlebot3* \
-              ros-${{ matrix.ros_distro }}-gazebo-* \
-              ros-${{ matrix.ros_distro }}-ros-gz* \
-              ros-${{ matrix.ros_distro }}-gazebo-ros-pkgs \
-              ros-${{ matrix.ros_distro }}-ros2-control \
-              ros-${{ matrix.ros_distro }}-robot-state-publisher \
-              ros-${{ matrix.ros_distro }}-gazebo-ros2-control \
-              ros-${{ matrix.ros_distro }}-ros2-controllers \
-              ros-${{ matrix.ros_distro }}-topic-tools \
-              python3-rosdep
-            rosdep init || true
-            rosdep update
-            pip3 install --no-cache-dir pyserial flask flask-ask-sdk ask-sdk xmlschema pyyaml shapely notebook
-
-      - name: Resolve dependencies
+          apt-get update && apt-get install -y python3-rosdep
+          rosdep init || true
+          rosdep update
+          
+      - name: Build selected packages
         shell: bash
         run: |
-          source /opt/ros/${{ matrix.ros_distro }}/setup.bash
+          source /opt/ros/${{ matrix.ros_distribution }}/setup.bash
+          cd ros_ws
+          colcon build --packages-select \
+            obstacles_msgs
+      #run colcon build --symlink-install --parallel-workers 1 && source install/setup.bash  
+      - name: Build remaining packages
+        shell: bash
+        run: |
+          source /opt/ros/${{ matrix.ros_distribution }}/setup.bash
           cd ros_ws
           rosdep install --from-paths src --ignore-src -r -y || true
-
-      - name: Build (selettivo opzionale)
-        if: false 
-        shell: bash
-        run: |
-          source /opt/ros/${{ matrix.ros_distro }}/setup.bash
-          cd ros_ws
-          colcon build --packages-select obstacles_msgs
-
-      - name: Build completo
-        shell: bash
-        run: |
-          source /opt/ros/${{ matrix.ros_distro }}/setup.bash
-          cd ros_ws
-          colcon build --symlink-install --event-handlers console_cohesion+ status+
-
-      - name: Test (opzionale)
-        if: false
-        shell: bash
-        run: |
-          source /opt/ros/${{ matrix.ros_distro }}/setup.bash
-          cd ros_ws
-          colcon test
-          colcon test-result --verbose
+          colcon build --symlink-install --parallel-workers 1
+          source install/setup.bash
