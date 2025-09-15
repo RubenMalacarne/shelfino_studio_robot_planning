@@ -16,7 +16,6 @@ This Demo Video shows the project in action: [Demo Video]().
 - **Simulation Environment**: [Gazebo](https://gazebosim.org/docs/latest/ros2_integration/)
 - **Motion Planning**: [NAV2](https://docs.nav2.org/) (only to send the commands to the robot)
 - **Task Planning**: Custom ROS 2 nodes
-- **Other features**: Use a radiocommand to start/stop the robot  
 - **Docker user:** YES
 - **CI/CD-GithubAction:** YES (only colcon build action)
 - **Radiocommand**: [RadioMaster pocket](https://radiomasterrc.com/collections/pocket-radio) with [OpenTX](https://www.open-tx.org/) firmware
@@ -37,9 +36,11 @@ The simulation scene includes the following key components:
 
 ## Installation Guide
 
-This guide explains how to set up the project on your local machin, using docker.
+This guide explains how to set up the project on your local machine, using docker.
 
->Note: docker use 6 GB
+>**Important**: If you want to run the project without docker, you need to have ROS 2 Humble installed on your machine, along with Gazebo and other dependencies (see dockerfile).
+
+>**Note**: docker use 6 GB
 
 If you prefer you can see this video tutorial: [Video Tutorial]() to install and setup the project, or you can follow the steps below:
 
@@ -47,53 +48,71 @@ If you prefer you can see this video tutorial: [Video Tutorial]() to install and
    - [Docker Installation Guide](https://docs.docker.com/get-docker/)
    - [Docker Compose Installation Guide](https://docs.docker.com/compose/install/)
 
-2. **Clone the Repository**: Start by cloning the project repository to your local machine.
+2. **Clone the Repository**: Start by cloning the project repository to your worksapce folder.
 
    ```bash
-   git clone <repository_url>
-   cd <repository_directory>
+   git clone https://github.com/RubenMalacarne/shelfino_studio_robot_planning.git src
+   cd src
    ```
 
-3. **Build the Docker Image**: Use the provided Dockerfile to build the Docker image.
+3. **Allow Docker to Access X Server**: To enable GUI applications within the Docker container, you need to allow access to your X server. Run the following command:
+   ```bash
+      xhost +local:root
+      ```
+
+4. **Build the Docker Compose**: Navigate to the directory containing the `docker-compose.yml` file and build the Docker image.
 
    ```bash
-   docker build -t robot_planning_app .
+   docker compose build rp_project
    ```
 
-4. **Run the Docker Container**: Use Docker Compose to run the container with the necessary configurations.
+5. **Run the Docker Container**: Use Docker Compose to run the container with the necessary configurations.
 
    ```bash 
-    docker-compose up
+    docker-compose up -d
     ```
-5. **compile the project**: inside the docker container, navigate to the src directory and run colcon build
+
+7. **Access the Docker Container**: Once the container is running, you can access it using the following command:
 
    ```bash
-   cd ~/ros2_ws
-   colcon build --symlink-install
-   source install/setup.bash
-   ```
-6. **Launch the Simulation**: Use the provided launch files to start the simulation environment.
-
-   ```bash
-   ros2 launch <launch_file_name>.launch.py
+   docker exec -it ros2_robot_planning_project bash
    ```
 
-7. **Launch the planning algorithm**:
+8. **compile the project**: inside the docker container
 
    ```bash
-   ros2 launch <planning_algorithm_launch_file>.launch.py
-   ``` 
-8. **Send Path Planning Requests**: Use the provided service to send path planning requests to the robot.
+   colcon build --symlink-install --parallel-workers 1 && source install/setup.bash 
+   ```
+   > Note: can be happen some error during the build, just ignore it, do the `source install/setup.bash` and try to build again.
+
+Now you are inside the docker container and you can run the project. ;)
+
+## Usage Instructions
+To run the simulation and test the path planning algorithms, follow these steps:
+
+1. **Launch the Simulation**: Use the provided launch files to start the simulation environment.
 
    ```bash
-   ros2 service call /<service_name> <service_type> "{<request_parameters>}"
+   ros2 launch projects evacuation.launch.py
    ```
 
+2.  **Launch the planning algorithm**:
 
+      for probabilistic planning:
+      ```bash
+      ros2 launch planning_pkg prm_executor.launch.py
+      ``` 
 
-## Run and test
+      for combinatorial planning:
+      ```bash
+      ros2 launch planning_pkg prm_executor.launch.py
+      ``` 
 
-when you clone/download the repo, to run the simulation and test the path planning algorithms, follow these steps:
+3.  **Send Path Planning Requests**: Use the provided service to send path planning requests to the robot.
+
+       ```bash
+       ros2 service call /service_trigger_dubins_path std_srvs/srv/Trigger {}
+       ```
 
 This Demo Video shows the project in action: [Demo Video]().
 
@@ -114,10 +133,8 @@ workspace/
 
 ```
 
-
-
 ## Link of the Report
 
-If you want interest to see the report of the project, you can find it here: [Report Link]() 
+If you want interest to see the report of the project, you can find it here: [Report Link](https://drive.google.com/drive/folders/1Q7MqyY9uJhHKeTNzAhIWHm9b5ftJSl7X?usp=sharing) 
 
 Enjoy the project! :D

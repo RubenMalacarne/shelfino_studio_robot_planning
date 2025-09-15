@@ -33,12 +33,6 @@ install(DIRECTORY include/
   DESTINATION include
 )
 
-# Install python node for ros2 run
-install(PROGRAMS
-  planning_pkg/cell_decomposition.py
-  DESTINATION lib/${PROJECT_NAME}
-  RENAME cell_decomposition
-)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
