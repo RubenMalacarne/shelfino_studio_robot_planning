@@ -1,0 +1,95 @@
+name: Build and Compile ROS2 workspace
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ros_distro: [ humble ]
+        include:
+          - ros_distro: humble
+            docker_image: osrf/ros:humble-desktop-full
+
+    container:
+      image: ${{ matrix.docker_image }}
+
+    steps:
+      - name: Prep workspace
+        run: mkdir -p ros_ws/src
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: ros_ws/src
+
+      - name: Git auth (opzionale)
+        if: secrets.GH_TOKEN != ''
+        run: |
+          git config --global url."https://${{ secrets.GH_TOKEN }}:x-oauth-basic@github.com/".insteadOf "https://github.com/"
+
+      - name: Install system deps
+        run: |
+            apt-get update
+            apt-get install -y \
+              python3-pip \
+              python3-colcon-common-extensions \
+              libpcl-dev \
+              ros-${{ matrix.ros_distro }}-slam-toolbox \
+              ros-${{ matrix.ros_distro }}-teleop-twist-joy \
+              ros-${{ matrix.ros_distro }}-teleop-twist-keyboard \
+              ros-${{ matrix.ros_distro }}-twist-mux \
+              ros-${{ matrix.ros_distro }}-joint-state-publisher-gui \
+              ros-${{ matrix.ros_distro }}-xacro \
+              ros-${{ matrix.ros_distro }}-navigation2 \
+              ros-${{ matrix.ros_distro }}-nav2-bringup \
+              ros-${{ matrix.ros_distro }}-turtlebot3* \
+              ros-${{ matrix.ros_distro }}-gazebo-* \
+              ros-${{ matrix.ros_distro }}-ros-gz* \
+              ros-${{ matrix.ros_distro }}-gazebo-ros-pkgs \
+              ros-${{ matrix.ros_distro }}-ros2-control \
+              ros-${{ matrix.ros_distro }}-robot-state-publisher \
+              ros-${{ matrix.ros_distro }}-gazebo-ros2-control \
+              ros-${{ matrix.ros_distro }}-ros2-controllers \
+              ros-${{ matrix.ros_distro }}-topic-tools \
+              python3-rosdep
+            rosdep init || true
+            rosdep update
+            pip3 install --no-cache-dir pyserial flask flask-ask-sdk ask-sdk xmlschema pyyaml shapely notebook
+
+      - name: Resolve dependencies
+        shell: bash
+        run: |
+          source /opt/ros/${{ matrix.ros_distro }}/setup.bash
+          cd ros_ws
+          rosdep install --from-paths src --ignore-src -r -y || true
+
+      - name: Build (selettivo opzionale)
+        if: false 
+        shell: bash
+        run: |
+          source /opt/ros/${{ matrix.ros_distro }}/setup.bash
+          cd ros_ws
+          colcon build --packages-select obstacles_msgs
+
+      - name: Build completo
+        shell: bash
+        run: |
+          source /opt/ros/${{ matrix.ros_distro }}/setup.bash
+          cd ros_ws
+          colcon build --symlink-install --event-handlers console_cohesion+ status+
+
+      - name: Test (opzionale)
+        if: false
+        shell: bash
+        run: |
+          source /opt/ros/${{ matrix.ros_distro }}/setup.bash
+          cd ros_ws
+          colcon test
+          colcon test-result --verbose
