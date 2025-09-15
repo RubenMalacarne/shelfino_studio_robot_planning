@@ -86,12 +86,12 @@ jobs:
           cd ros_ws
           colcon build --packages-select \
             obstacles_msgs
-      #run colcon build --symlink-install --parallel-workers 1 && source install/setup.bash  
+          source install/setup.bash
+      
       - name: Build remaining packages
         shell: bash
         run: |
-          source /opt/ros/${{ matrix.ros_distribution }}/setup.bash
           cd ros_ws
           rosdep install --from-paths src --ignore-src -r -y || true
-          colcon build --symlink-install --parallel-workers 1
+          colcon build --parallel-workers 1
           source install/setup.bash
