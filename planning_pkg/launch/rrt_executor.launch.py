@@ -2,9 +2,9 @@
 
 import os
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, LogInfo
+from launch.actions import DeclareLaunchArgument, LogInfo, TimerAction
 from launch.substitutions import LaunchConfiguration, TextSubstitution
-from launch_ros.actions import Node
+import launch_ros
 from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
@@ -48,8 +48,37 @@ def generate_launch_description():
         description='Agent collision radius for multi-agent planning'
     )
 
+    # Re-mapping Node (provides /service_trigger_inflated service)
+    re_mapping_node = launch_ros.actions.Node(
+        package='planning_pkg',
+        executable='re_mapping',
+        name='re_mapping',
+        output='screen'
+    )
+
+    # Nav2 Path Client Node (executes paths to move robots)
+    nav2_pathclient_node = launch_ros.actions.Node(
+        package='planning_pkg',
+        executable='nav2_pathclient',
+        name='nav2_pathclient',
+        output='screen'
+    )
+
+    # Dubins Curve Converter Node (converts RRT paths to Dubins paths)
+    dubins_converter_node = TimerAction(
+        period=1.0,
+        actions=[
+            launch_ros.actions.Node(
+                package='planning_pkg',
+                executable='dubins_curve_converter',
+                name='dubins_converter',
+                output='screen'
+            )
+        ]
+    )
+
     # RRT Planning Orchestrator Node
-    rrt_orchestrator_node = Node(
+    rrt_orchestrator_node = launch_ros.actions.Node(
         package='planning_pkg',
         executable='path_orchestrator_rrt',
         name='rrt_planning_orchestrator',
@@ -86,6 +115,9 @@ def generate_launch_description():
         rrt_goal_bias_arg,
         astar_time_step_arg,
         astar_collision_radius_arg,
+        re_mapping_node,
+        nav2_pathclient_node,
+        dubins_converter_node,
         rrt_orchestrator_node,
         log_info,
     ])
