@@ -79,7 +79,7 @@ jobs:
           rosdep init || true
           rosdep update
           
-      - name: Build selected packages
+      - name: Build packages
         shell: bash
         run: |
           source /opt/ros/${{ matrix.ros_distribution }}/setup.bash
@@ -87,11 +87,5 @@ jobs:
           colcon build --packages-select \
             obstacles_msgs
           source install/setup.bash
+          colcon build --symlink-install --parallel-workers 1 && source install/setup.bash 
       
-      - name: Build remaining packages
-        shell: bash
-        run: |
-          cd ros_ws
-          rosdep install --from-paths src --ignore-src -r -y || true
-          colcon build --parallel-workers 1
-          source install/setup.bash

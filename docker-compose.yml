@@ -20,10 +20,12 @@ services:
       - DISPLAY=${DISPLAY}
       - LIBGL_ALWAYS_INDIRECT=0
       - QT_X11_NO_MITSHM=1
-      - ROS_DOMAIN_ID=0
+      - ROS_DOMAIN_ID=1
       - CYCLONEDDS_URI=file:///ros2_ws/cyclonedds.xml
     devices:
-      - /dev/input/js0:/dev/input/js0  
+      - /dev/input/js0:/dev/input/js0
+      - /dev/input/js1:/dev/input/js1
+      - /dev/bus/usb:/dev/bus/usb
     privileged: true
     command: bash
 
