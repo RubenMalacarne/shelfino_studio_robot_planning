@@ -85,7 +85,13 @@ jobs:
           source /opt/ros/${{ matrix.ros_distribution }}/setup.bash
           cd ros_ws
           colcon build --packages-select \
-            obstacles_msgs
-          source install/setup.bash
-          colcon build --symlink-install --parallel-workers 1 && source install/setup.bash 
-      
+            obstacles_msgs \
+            shelfino_description \
+            shelfino_gazebo \
+            shelfino_navigation \
+            map_pkg \
+            evader \
+            planning_pkg \
+            projects \
+            --symlink-install --parallel-workers 1 && source install/setup.bash 
+          
