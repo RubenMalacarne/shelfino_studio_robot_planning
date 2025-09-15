@@ -52,6 +52,7 @@ If you prefer you can see this video tutorial: [Video Tutorial]() to install and
 
    ```bash
    git clone https://github.com/RubenMalacarne/shelfino_studio_robot_planning.git src
+   git submodule update --init --recursive
    cd src
    ```
 
@@ -76,6 +77,14 @@ If you prefer you can see this video tutorial: [Video Tutorial]() to install and
 
    ```bash
    docker exec -it ros2_robot_planning_project bash
+   ```
+
+8. if you want use a radiocommand of the joy_manager_ros2 package, you need to connect the radiocommand to your computer via USB and give the permission to access the device. You can do this by running the following command (inside docker):
+
+   ```bash
+   sudo chmod 666 /dev/input/js0
+   sudo chmod 666 /dev/input/event*
+   sudo chmod 666 /dev/hidraw*
    ```
 
 8. **compile the project**: inside the docker container

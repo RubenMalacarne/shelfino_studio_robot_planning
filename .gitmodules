@@ -1,0 +1,3 @@
+[submodule "joy_manager_ros2"]
+	path = joy_manager_ros2
+	url = https://github.com/RubenMalacarne/joy_manager_ros2.git

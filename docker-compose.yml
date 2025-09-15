@@ -23,8 +23,8 @@ services:
       - ROS_DOMAIN_ID=0
       - CYCLONEDDS_URI=file:///ros2_ws/cyclonedds.xml
     devices:
+      - /dev/input:/dev/input
       - /dev/input/js0:/dev/input/js0
-      - /dev/input/js1:/dev/input/js1
       - /dev/bus/usb:/dev/bus/usb
     privileged: true
     command: bash
@@ -36,3 +36,7 @@ services:
 #// ros2 service call /service_trigger_smoothing_path std_srvs/srv/Trigger {} 
 
 #// ros2 service call /service_trigger_dubins_path std_srvs/srv/Trigger {}
+#per la usb
+# sudo chmod 666 /dev/input/js0
+# sudo chmod 666 /dev/input/event*
+# sudo chmod 666 /dev/hidraw*
