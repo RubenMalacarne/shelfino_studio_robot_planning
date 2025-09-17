@@ -14,10 +14,10 @@
 #include <geometry_msgs/msg/point.hpp>
 #include <nav_msgs/msg/path.hpp>
 
-
 // ============================================================================
 // planning_pkg::CombPathGenerator
 // ============================================================================
+
 namespace planning_pkg
 {
 
@@ -256,34 +256,26 @@ std::vector<std::pair<double, double>> CombPathGenerator::get_pointlist(
     const geometry_msgs::msg::Polygon &arena) const
 {
     std::vector<std::pair<double, double>> points;
-
-    // Aggiungi tutti i vertici dell'arena
     for (const auto &point : arena.points)
     {
         points.emplace_back(static_cast<double>(point.x), static_cast<double>(point.y));
     }
 
-    // Aggiungi tutti i vertici degli ostacoli
     for (const auto &obstacle : obstacles.obstacles)
     {
         if (obstacle.radius > 0.0)
         {
-            // Per ostacoli circolari, aggiungi il centro e alcuni punti sulla circonferenza
             double center_x = static_cast<double>(obstacle.polygon.points[0].x);
             double center_y = static_cast<double>(obstacle.polygon.points[0].y);
 
-            // Aggiungi il centro
             points.emplace_back(center_x, center_y);
-
-            // Aggiungi punti cardinali della circonferenza
-            points.emplace_back(center_x + obstacle.radius, center_y); // Est
-            points.emplace_back(center_x - obstacle.radius, center_y); // Ovest
-            points.emplace_back(center_x, center_y + obstacle.radius); // Nord
-            points.emplace_back(center_x, center_y - obstacle.radius); // Sud
+            points.emplace_back(center_x + obstacle.radius, center_y); 
+            points.emplace_back(center_x - obstacle.radius, center_y); 
+            points.emplace_back(center_x, center_y + obstacle.radius); 
+            points.emplace_back(center_x, center_y - obstacle.radius); 
         }
         else
         {
-            // Per ostacoli poligonali, aggiungi tutti i vertici
             for (const auto &point : obstacle.polygon.points)
             {
                 points.emplace_back(static_cast<double>(point.x), static_cast<double>(point.y));
@@ -291,7 +283,7 @@ std::vector<std::pair<double, double>> CombPathGenerator::get_pointlist(
         }
     }
 
-    // Rimuovi duplicati (opzionale, ma utile)
+    // Rimuovi duplicati
     std::sort(points.begin(), points.end());
     points.erase(std::unique(points.begin(), points.end()), points.end());
 
@@ -305,7 +297,6 @@ std::vector<HorizontalLine> CombPathGenerator::set_vertical_line(
 {
     std::vector<HorizontalLine> horizontal_lines;
 
-    // Per ogni punto, linea orizzontale passante per quel punto
     for (const auto &point : points)
     {
         double y = point.second;
@@ -313,14 +304,11 @@ std::vector<HorizontalLine> CombPathGenerator::set_vertical_line(
         // Trova i limiti dell'arena per questa coordinata y
         std::vector<std::pair<double, double>> arena_segments = get_intersection_points(y, obstacles, arena);
 
-        // Per ogni segmento valido dell'arena, crea una linea orizzontale
-        // escludendo le parti che intersecano gli ostacoli
         for (const auto &segment : arena_segments)
         {
             double x_start = segment.first;
             double x_end = segment.second;
 
-            // Raccogli tutte le intersezioni con gli ostacoli in questo segmento
             std::vector<std::pair<double, double>> obstacle_intervals;
 
             for (const auto &obstacle : obstacles.obstacles)
@@ -337,7 +325,6 @@ std::vector<HorizontalLine> CombPathGenerator::set_vertical_line(
                         double x1 = std::min(intersections[0], intersections[1]);
                         double x2 = std::max(intersections[0], intersections[1]);
 
-                        // Clamp alle bounds del segmento dell'arena
                         x1 = std::max(x1, x_start);
                         x2 = std::min(x2, x_end);
 
@@ -349,7 +336,7 @@ std::vector<HorizontalLine> CombPathGenerator::set_vertical_line(
                 }
                 else
                 {
-                    // Ostacolo poligonale - trova tutte le intersezioni e determina gli intervalli occupati
+                    // Ostacolo poligonale 
                     const auto &poly = obstacle.polygon;
                     std::vector<double> poly_intersections;
 
@@ -371,13 +358,10 @@ std::vector<HorizontalLine> CombPathGenerator::set_vertical_line(
                         }
                     }
 
-                    // Ordina le intersezioni
                     std::sort(poly_intersections.begin(), poly_intersections.end());
                     poly_intersections.erase(
                         std::unique(poly_intersections.begin(), poly_intersections.end()),
                         poly_intersections.end());
-
-                    // Per poligoni, le intersezioni a coppie definiscono gli intervalli occupati
                     for (size_t i = 0; i < poly_intersections.size(); i += 2)
                     {
                         if (i + 1 < poly_intersections.size())
@@ -385,7 +369,6 @@ std::vector<HorizontalLine> CombPathGenerator::set_vertical_line(
                             double interval_start = poly_intersections[i];
                             double interval_end = poly_intersections[i + 1];
 
-                            // Verifica che l'intervallo sia effettivamente dentro l'ostacolo
                             double mid_x = (interval_start + interval_end) / 2.0;
                             if (point_in_polygon(poly, mid_x, y))
                             {
@@ -398,8 +381,6 @@ std::vector<HorizontalLine> CombPathGenerator::set_vertical_line(
 
             // Ordina gli intervalli degli ostacoli per coordinate x
             std::sort(obstacle_intervals.begin(), obstacle_intervals.end());
-
-            // Unisci intervalli sovrapposti
             std::vector<std::pair<double, double>> merged_intervals;
             for (const auto &interval : obstacle_intervals)
             {
@@ -413,11 +394,9 @@ std::vector<HorizontalLine> CombPathGenerator::set_vertical_line(
                 }
             }
 
-            // Genera segmenti liberi da ostacoli
             double current_x = x_start;
             for (const auto &blocked_interval : merged_intervals)
             {
-                // Aggiungi segmento libero prima dell'ostacolo
                 if (current_x < blocked_interval.first)
                 {
                     double free_end = blocked_interval.first;
@@ -430,7 +409,7 @@ std::vector<HorizontalLine> CombPathGenerator::set_vertical_line(
                 current_x = std::max(current_x, blocked_interval.second);
             }
 
-            // Aggiungi l'ultimo segmento libero se c'è spazio
+            
             if (current_x < x_end)
             {
                 if (x_end - current_x > 1e-6) // Evita segmenti troppo piccoli
@@ -464,7 +443,7 @@ std::vector<std::pair<double, double>> CombPathGenerator::set_point_in_vertical_
     // Se la linea è troppo corta per contenere punti con l'offset specificato
     if (line_length < offset)
     {
-        // Aggiungi solo il punto centrale
+        // Aggiungi punto centrale
         double mid_x = (x_start + x_end) / 2.0;
         points.emplace_back(mid_x, y);
         return points;
@@ -516,7 +495,6 @@ std::vector<Cell> CombPathGenerator::get_cells_btw_vlines(
         lines_by_y[line.y].push_back(line);
     }
 
-    // Ordina le coordinate y
     std::vector<double> y_coords;
     for (const auto &pair : lines_by_y)
     {
@@ -524,7 +502,6 @@ std::vector<Cell> CombPathGenerator::get_cells_btw_vlines(
     }
     std::sort(y_coords.begin(), y_coords.end());
 
-    // Genera celle tra linee verticali consecutive
     for (size_t i = 0; i < y_coords.size() - 1; ++i)
     {
         double y1 = y_coords[i];
@@ -533,17 +510,13 @@ std::vector<Cell> CombPathGenerator::get_cells_btw_vlines(
         const auto &lines1 = lines_by_y[y1];
         const auto &lines2 = lines_by_y[y2];
 
-        // Per ogni segmento della linea inferiore (y1)
         for (const auto &line1 : lines1)
         {
-            // Trova segmenti sovrapposti nella linea superiore (y2)
             for (const auto &line2 : lines2)
             {
-                // Calcola l'intersezione orizzontale tra i due segmenti
                 double x_start = std::max(line1.x_start, line2.x_start);
                 double x_end = std::min(line1.x_end, line2.x_end);
 
-                // Se c'è sovrapposizione, crea una cella
                 if (x_start < x_end && (x_end - x_start) > 1e-6)
                 {
                     Cell cell;
@@ -601,7 +574,7 @@ std::vector<std::pair<double, double>> CombPathGenerator::get_intersection_point
     std::sort(intersections.begin(), intersections.end());
     intersections.erase(std::unique(intersections.begin(), intersections.end()), intersections.end());
 
-    // Crea coppie di segmenti (assumendo che l'arena sia un poligono convesso)
+  
     std::vector<std::pair<double, double>> segments;
     for (size_t i = 0; i < intersections.size(); i += 2)
     {
@@ -619,7 +592,6 @@ std::vector<std::pair<double, double>> CombPathGenerator::get_intersection_point
     return segments;
 }
 
-// Nuovo metodo per ottenere solo le linee orizzontali
 std::vector<HorizontalLine> CombPathGenerator::get_horizontal_lines(
     const obstacles_msgs::msg::ObstacleArrayMsg &obstacles,
     const geometry_msgs::msg::Polygon &arena)
@@ -641,7 +613,6 @@ std::vector<std::vector<int>> CombPathGenerator::get_arc(
     // Crea un mapping per identificare rapidamente i punti
     std::map<std::pair<double, double>, int> point_to_index;
 
-    // Indicizza i punti sulle linee orizzontali
     for (size_t i = 0; i < points.size(); ++i)
     {
         point_to_index[points[i]] = static_cast<int>(i);
@@ -705,7 +676,7 @@ std::vector<std::vector<int>> CombPathGenerator::get_arc(
                     }
                     else
                     {
-                        // Se non troviamo esattamente il centroide, cerchiamo il più vicino
+                        
                         double min_dist = std::numeric_limits<double>::infinity();
 
                         for (size_t c = 0; c < points_centroids.size(); ++c)
@@ -728,35 +699,29 @@ std::vector<std::vector<int>> CombPathGenerator::get_arc(
                     // Trova tutti i punti sulla linea inferiore (y1) che sono nella cella
                     for (const auto &point : points)
                     {
-                        if (std::abs(point.second - y1) < 1e-6 && // stesso y
+                        if (std::abs(point.second - y1) < 1e-6 &&
                             point.first >= x_start && point.first <= x_end)
-                        { // dentro la cella in x
+                        {
 
                             auto point_it = point_to_index.find(point);
                             if (point_it != point_to_index.end())
                             {
                                 int point_idx = point_it->second;
-
-                                // Collega punto al centroide (bidirezionale)
                                 adjacency_list[point_idx].push_back(centroid_idx);
                                 adjacency_list[centroid_idx].push_back(point_idx);
                             }
                         }
                     }
 
-                    // Trova tutti i punti sulla linea superiore (y2) che sono nella cella
                     for (const auto &point : points)
                     {
-                        if (std::abs(point.second - y2) < 1e-6 && // stesso y
+                        if (std::abs(point.second - y2) < 1e-6 && 
                             point.first >= x_start && point.first <= x_end)
-                        { // dentro la cella in x
-
+                        {
                             auto point_it = point_to_index.find(point);
                             if (point_it != point_to_index.end())
                             {
                                 int point_idx = point_it->second;
-
-                                // Collega punto al centroide (bidirezionale)
                                 adjacency_list[point_idx].push_back(centroid_idx);
                                 adjacency_list[centroid_idx].push_back(point_idx);
                             }
@@ -767,7 +732,6 @@ std::vector<std::vector<int>> CombPathGenerator::get_arc(
         }
     }
 
-    // Rimuovi duplicati dalla lista di adiacenza
     for (auto &adj : adjacency_list)
     {
         std::sort(adj.begin(), adj.end());
