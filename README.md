@@ -17,7 +17,7 @@ This Demo Video shows the project in action: [Demo Video]().
 - **Motion Planning**: [NAV2](https://docs.nav2.org/) (only to send the commands to the robot)
 - **Task Planning**: Custom ROS 2 nodes
 - **Docker user:** YES
-- **CI/CD-GithubAction:** YES (only colcon build action)
+- **CI/CD-GithubAction:** YES 
 - **Radiocommand**: [RadioMaster pocket](https://radiomasterrc.com/collections/pocket-radio) with [OpenTX](https://www.open-tx.org/) firmware
 
 
