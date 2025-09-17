@@ -6,7 +6,7 @@ This project combines theoretical knowledge with practical implementation, focus
 
 User can select different algorithms to see how they perform in various scenarios. It's just launch the different launch files and run the service to send the path planning request.
 
-This Demo Video shows the project in action: [Demo Video]().
+This Demo Video shows the project in action: [Demo Video](https://drive.google.com/file/d/1mH0Wm3G9giH5IraRVNd6KBnHFPfy1Ne8/view).
 
 ## Technologies Used
 
@@ -42,7 +42,7 @@ This guide explains how to set up the project on your local machine, using docke
 
 >**Note**: docker use 6 GB
 
-If you prefer you can see this video tutorial: [Video Tutorial]() to install and setup the project, or you can follow the steps below:
+If you prefer you can see this video tutorial: [Video Tutorial](https://drive.google.com/file/d/1NN9B0Se9HPpIK6yeOjC1gBDoOoel8Dkg/view) to install and setup the project, or you can follow the steps below:
 
 1. **Prerequisites**: Ensure you have Docker and Docker Compose installed on your machine. You can download them from the following links:
    - [Docker Installation Guide](https://docs.docker.com/get-docker/)
@@ -101,14 +101,14 @@ To run the simulation and test the path planning algorithms, follow these steps:
 
 2.  **Launch the planning algorithm**:
 
-      for probabilistic planning:
+      for probabilistic planning: [video example](https://drive.google.com/file/d/1mH0Wm3G9giH5IraRVNd6KBnHFPfy1Ne8/view)
       ```bash
       ros2 launch planning_pkg prm_executor.launch.py
       ``` 
 
-      for combinatorial planning:
+      for combinatorial planning:[video example](https://drive.google.com/file/d/1z2rgzg68H7R2UbFWQP6JDs7ZisLfmGm1/view)
       ```bash
-      ros2 launch planning_pkg prm_executor.launch.py
+      ros2 launch planning_pkg comb_executor.launch.py
       ``` 
 
 3.  **Send Path Planning Requests**: Use the provided service to send path planning requests to the robot.
@@ -116,9 +116,6 @@ To run the simulation and test the path planning algorithms, follow these steps:
        ```bash
        ros2 service call /service_trigger_dubins_path std_srvs/srv/Trigger {}
        ```
-
-This Demo Video shows the project in action: [Demo Video]().
-
 
 ## Project Structure
 
