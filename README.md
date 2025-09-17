@@ -61,25 +61,19 @@ If you prefer you can see this video tutorial: [Video Tutorial]() to install and
       xhost +local:root
       ```
 
-4. **Build the Docker Compose**: Navigate to the directory containing the `docker-compose.yml` file and build the Docker image.
+4. **Build and run the Docker Compose**: Navigate to the directory containing the `docker-compose.yml` file and build the Docker image.
 
    ```bash
-   docker compose build rp_project
+   docker compose up -d rp_project
    ```
 
-5. **Run the Docker Container**: Use Docker Compose to run the container with the necessary configurations.
-
-   ```bash 
-    docker-compose up -d
-    ```
-
-7. **Access the Docker Container**: Once the container is running, you can access it using the following command:
+5. **Access the Docker Container**: Once the container is running, you can access it using the following command:
 
    ```bash
    docker exec -it ros2_robot_planning_project bash
    ```
 
-8. if you want use a radiocommand of the joy_manager_ros2 package, you need to connect the radiocommand to your computer via USB and give the permission to access the device. You can do this by running the following command (inside docker):
+6. if you want use a radiocommand of the joy_manager_ros2 package, you need to connect the radiocommand to your computer via USB and give the permission to access the device. You can do this by running the following command (inside docker):
 
    ```bash
    sudo chmod 666 /dev/input/js0
@@ -87,7 +81,7 @@ If you prefer you can see this video tutorial: [Video Tutorial]() to install and
    sudo chmod 666 /dev/hidraw*
    ```
 
-8. **compile the project**: inside the docker container
+7. **compile the project**: inside the docker container
 
    ```bash
    colcon build --symlink-install --parallel-workers 1 && source install/setup.bash 
