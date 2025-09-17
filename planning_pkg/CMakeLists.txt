@@ -69,11 +69,6 @@ add_executable(nav2_pathclient
   src/utils/nav2_pathclient.cpp
 )
 
-add_executable(smooth_converter
-  src/utils/smooth_converter.cpp
-)
-
-
 add_executable(dubins_curve_converter
   src/utils/dubins_curve_converter.cpp
   src/utils/dubins_curve.cpp
@@ -167,14 +162,6 @@ ament_target_dependencies(nav2_pathclient
   obstacles_msgs
 )
 
-ament_target_dependencies(smooth_converter
-  rclcpp
-  nav_msgs
-  geometry_msgs
-  tf2
-  tf2_geometry_msgs
-  std_srvs
-)
 
 ament_target_dependencies(dubins_curve_converter
   rclcpp
@@ -199,7 +186,6 @@ target_include_directories(path_orchestrator_prm PUBLIC ${CMAKE_CURRENT_SOURCE_D
 target_include_directories(path_orchestrator_comb PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(linear_path PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(comb_path PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_include_directories(smooth_converter PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(dubins_curve_converter PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(prm_path PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_include_directories(visualizer_rviz PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -215,7 +201,6 @@ prm_path
 linear_path
 comb_path
 dubins_curve_converter
-smooth_converter
 visualizer_rviz
 DESTINATION lib/${PROJECT_NAME}
 )

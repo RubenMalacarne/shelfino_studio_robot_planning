@@ -70,10 +70,6 @@ RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc && \
 # Default command to run when the container starts
 CMD ["bash"]
 
-# to mantain ros domain id in your pc copy this inside bashrc: 
-# gedit ~/.bashrc
-# export ROS_DOMAIN_ID=42
-
 #to execute docker
 
 #docker exec -it ros2_robot_planning_project bash

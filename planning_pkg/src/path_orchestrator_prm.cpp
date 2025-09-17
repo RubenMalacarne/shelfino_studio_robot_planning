@@ -345,7 +345,7 @@ private:
         {
             // 1) Sample random points for PRM
             RCLCPP_INFO(this->get_logger(), "Sampling random points...");
-            path_gen_.sample_random_points(last_obstacles_, last_arena_, 500);
+            path_gen_.sample_random_points(last_obstacles_, last_arena_, 1000);
 
             // 2) Build k-NN edges
             RCLCPP_INFO(this->get_logger(), "Building k-NN edges...");

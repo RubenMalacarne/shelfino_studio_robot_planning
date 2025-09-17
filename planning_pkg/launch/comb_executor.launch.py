@@ -29,17 +29,6 @@ def generate_launch_description():
         ]
     )
 
-    smooth_converter_node = TimerAction(
-        period=1.0,
-        actions=[
-            launch_ros.actions.Node(
-                package='planning_pkg',
-                executable='smooth_converter',
-                name='smooth_converter',
-                output='screen'
-            )
-        ]
-    )
 
     orchestrator_node = TimerAction(
         period=2.0,
@@ -56,11 +45,8 @@ def generate_launch_description():
     nodes = [
         re_mapping_node,
         nav2_pathclient_node,
-        dubins_converter_node, #or smooth_converter_node
+        dubins_converter_node, 
         orchestrator_node
     ]
 
     return launch.LaunchDescription(nodes)
-
-#// to launch the service smooth and send the path:  
-#// ros2 service call /service_trigger_smoothing_path std_srvs/srv/Trigger {}
