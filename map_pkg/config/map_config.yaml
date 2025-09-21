@@ -16,8 +16,8 @@
 /**/send_gates:
   ros__parameters:
     use_namespace: false    # If true, the gates will be spawned one for each Shelfino. Not yet implemented
-    x: [-9.0]                # X position of the gate(s)
-    y: [0.0]                # Y position of the gate(s)
+    x: [-8.0]                # X position of the gate(s)
+    y: [1.0]                # Y position of the gate(s)
     yaw: [3.14]              # Yaw of the gate(s)
     # Values of x and y different from 0.0 will spawn the gates in the given position    
 
