@@ -326,84 +326,86 @@ private:
         
         // is_linear_1 = false; // FORZATURA PER TESTING COMB
         // is_linear_2 = false; // FORZATURA PER TESTING COMB
-        
-        if (is_linear_1)
-        {
-            RCLCPP_INFO(this->get_logger(), "Direct path feasible for Robot 1, using linear path generator.");
-            path1 = linear_gen_.generate(wps_pos1, last_obstacles_, last_arena_);
-        }
-        if (is_linear_2)
-        {
-            RCLCPP_INFO(this->get_logger(), "Direct path feasible for Robot 2,using linear path generator.");
-            path2 = linear_gen_.generate(wps_pos2, last_obstacles_, last_arena_);
-        }
-
-        // 4) implement COMB only if at least one path is not linear
-        if (!is_linear_1 || !is_linear_2)
-        {
-
-            // ===== visuallizer part =====
-            std::vector<std::pair<double, double>> points_line;
-            std::vector<std::pair<double, double>> points_centroids;
-            std::vector<std::pair<double, double>> points = path_gen_.get_pointlist(last_obstacles_, last_arena_);
-            std::vector<planning_pkg::HorizontalLine> horizontal_lines = path_gen_.get_horizontal_lines(last_obstacles_, last_arena_);
-
-            for (const auto &line : horizontal_lines)
-            {
-                auto line_points = path_gen_.set_point_in_vertical_line(line, 1.0);
-                points_line.insert(points_line.end(), line_points.begin(), line_points.end());
-            }
-            std::vector<planning_pkg::Cell> cells = path_gen_.get_cells_btw_vlines(horizontal_lines);
-            for (const auto &cell : cells)
-            {
-                auto centroid = path_gen_.get_cell_centroid(cell);
-                points_centroids.push_back(centroid);
-            }
-            std::vector<std::vector<int>> arc_list = path_gen_.get_arc(horizontal_lines, points_line, points_centroids);
-            vertical_lines_data_.clear();
-            for (const auto &line : horizontal_lines)
-            {
-                vertical_lines_data_.emplace_back(
-                    line.y,
-                    0.0, // z coordinate (sempre 0 per linee orizzontali)
-                    std::make_pair(line.x_start, line.y),
-                    std::make_pair(line.x_end, line.y));
-            }
-
-            visualizer_.vis_points(points_centroids); // "points_centroids" or "points_line" or "points"
-            visualizer_.vis_line(horizontal_lines);
-            visualizer_.vis_cells(cells);
-            visualizer_.vis_arcs(arc_list, points_line, points_centroids);
-        }
-
-        // 4) Generate patjc with step of 0.1 m and frame "map"
-        RCLCPP_INFO(this->get_logger(), "Generating path for Robot 1 and 2...");
+        // 2) Generate paths based on feasibility
+        RCLCPP_INFO(this->get_logger(), "Generating paths...");
         try
         {
-            if (!is_linear_1)
+            if (is_linear_1)
             {
+                RCLCPP_INFO(this->get_logger(), "Direct path feasible for Robot 1, using linear path generator.");
+                path1 = linear_gen_.generate(wps_pos1, last_obstacles_, last_arena_);
+            }
+            else
+            {
+                RCLCPP_INFO(this->get_logger(), "Using COMB path generator for Robot 1.");
                 path1 = path_gen_.generate(wps_pos1, last_obstacles_, last_arena_);
             }
-            if (!is_linear_2)
+
+            if (is_linear_2)
             {
+                RCLCPP_INFO(this->get_logger(), "Direct path feasible for Robot 2, using linear path generator.");
+                path2 = linear_gen_.generate(wps_pos2, last_obstacles_, last_arena_);
+            }
+            else
+            {
+                RCLCPP_INFO(this->get_logger(), "Using COMB path generator for Robot 2.");
                 path2 = path_gen_.generate(wps_pos2, last_obstacles_, last_arena_);
             }
+
+            // 3) Visualization only if at least one path uses COMB
+            if (!is_linear_1 || !is_linear_2)
+            {
+                // ===== visualizer part =====
+                std::vector<std::pair<double, double>> points_line;
+                std::vector<std::pair<double, double>> points_centroids;
+                std::vector<std::pair<double, double>> points = path_gen_.get_pointlist(last_obstacles_, last_arena_);
+                std::vector<planning_pkg::HorizontalLine> horizontal_lines = path_gen_.get_horizontal_lines(last_obstacles_, last_arena_);
+
+                for (const auto &line : horizontal_lines)
+                {
+                    auto line_points = path_gen_.set_point_in_vertical_line(line, 1.0);
+                    points_line.insert(points_line.end(), line_points.begin(), line_points.end());
+                }
+                std::vector<planning_pkg::Cell> cells = path_gen_.get_cells_btw_vlines(horizontal_lines);
+                for (const auto &cell : cells)
+                {
+                    auto centroid = path_gen_.get_cell_centroid(cell);
+                    points_centroids.push_back(centroid);
+                }
+                std::vector<std::vector<int>> arc_list = path_gen_.get_arc(horizontal_lines, points_line, points_centroids);
+                vertical_lines_data_.clear();
+                for (const auto &line : horizontal_lines)
+                {
+                    vertical_lines_data_.emplace_back(
+                        line.y,
+                        0.0, // z coordinate (sempre 0 per linee orizzontali)
+                        std::make_pair(line.x_start, line.y),
+                        std::make_pair(line.x_end, line.y));
+                }
+
+                visualizer_.vis_points(points_centroids); // "points_centroids" or "points_line" or "points"
+                visualizer_.vis_line(horizontal_lines);
+                visualizer_.vis_cells(cells);
+                visualizer_.vis_arcs(arc_list, points_line, points_centroids);
+            }
+
+            // 4) Validate paths
             if (!path1.poses.empty())
             {
-                RCLCPP_INFO(this->get_logger(), "Path generate for Robot 1: %zu waypoints", path1.poses.size());
+                RCLCPP_INFO(this->get_logger(), "Path generated for Robot 1: %zu waypoints", path1.poses.size());
+            }
+            else
+            {
+                RCLCPP_ERROR(this->get_logger(), "NO path generated for Robot 1");
             }
 
             if (!path2.poses.empty())
             {
-                RCLCPP_INFO(this->get_logger(), "Path generate for Robot 2: %zu waypoints", path2.poses.size());
+                RCLCPP_INFO(this->get_logger(), "Path generated for Robot 2: %zu waypoints", path2.poses.size());
             }
-            else if (path1.poses.empty())
+            else
             {
-                RCLCPP_ERROR(this->get_logger(), "NO path for Robot 1");
-            }
-            else if (path2.poses.empty())
-            {
-                RCLCPP_ERROR(this->get_logger(), "NO path for Robot 2");
+                RCLCPP_ERROR(this->get_logger(), "NO path generated for Robot 2");
             }
         }
 
@@ -413,6 +415,10 @@ private:
             path1 = nav_msgs::msg::Path(); // Path vuoto
             path1.header.frame_id = "map";
             path1.header.stamp = this->get_clock()->now();
+            
+            path2 = nav_msgs::msg::Path();
+            path2.header.frame_id = "map";
+            path2.header.stamp = this->get_clock()->now();
         }
 
         // 5) check for subscribers before publishing
