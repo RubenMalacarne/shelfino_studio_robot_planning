@@ -20,7 +20,7 @@ namespace planning_pkg
 
         void vis_points(const std::vector<std::pair<double, double>> &points);
         void vis_cells(const std::vector<planning_pkg::Cell> &cells);
-        void vis_line();
+        void vis_line(const std::vector<planning_pkg::HorizontalLine> &horizontal_lines);
         void vis_arcs(const std::vector<std::vector<int>> &arc_list,
                       const std::vector<std::pair<double, double>> &points_line,
                       const std::vector<std::pair<double, double>> &points_centroids);

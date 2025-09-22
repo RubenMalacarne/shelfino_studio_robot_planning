@@ -371,7 +371,7 @@ private:
             }
 
             visualizer_.vis_points(points_centroids); // "points_centroids" or "points_line" or "points"
-            visualizer_.vis_line();
+            visualizer_.vis_line(horizontal_lines);
             visualizer_.vis_cells(cells);
             visualizer_.vis_arcs(arc_list, points_line, points_centroids);
         }

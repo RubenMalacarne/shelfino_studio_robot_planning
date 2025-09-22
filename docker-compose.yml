@@ -23,7 +23,6 @@ services:
       - ROS_DOMAIN_ID=0
       - CYCLONEDDS_URI=file:///ros2_ws/cyclonedds.xml
     devices:
-      - /dev/input/js0:/dev/input/js0
       - /dev/input:/dev/input
       - /dev/bus/usb:/dev/bus/usb
     privileged: true

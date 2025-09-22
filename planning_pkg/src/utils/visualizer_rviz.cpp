@@ -13,8 +13,8 @@ namespace planning_pkg
         pub_random_points_ = node_->create_publisher<visualization_msgs::msg::MarkerArray>("/prm_random_points", qos_markers);
         pub_knn_edges_ = node_->create_publisher<visualization_msgs::msg::MarkerArray>("/prm_knn_edges", qos_markers);
     }
-    
-    //combinatorial visualizer methods
+
+    // combinatorial visualizer methods
     void VisualizationUtils::vis_points(const std::vector<std::pair<double, double>> &points)
     {
         if (points.empty())
@@ -111,19 +111,19 @@ namespace planning_pkg
                     marker_array.markers.size());
     }
 
-    void VisualizationUtils::vis_line()
+    void VisualizationUtils::vis_line(const std::vector<planning_pkg::HorizontalLine> &horizontal_lines)
     {
-        if (vertical_lines_data_.empty())
+        if (horizontal_lines.empty())
         {
-            RCLCPP_WARN(node_->get_logger(), "No lines to visualize");
+            RCLCPP_WARN(node_->get_logger(), "No horizontal lines to visualize");
             return;
         }
 
         visualization_msgs::msg::MarkerArray marker_array;
 
-        for (size_t i = 0; i < vertical_lines_data_.size(); ++i)
+        for (size_t i = 0; i < horizontal_lines.size(); ++i)
         {
-            const auto &line_data = vertical_lines_data_[i];
+            const auto &line = horizontal_lines[i];
 
             visualization_msgs::msg::Marker line_marker;
             line_marker.header.frame_id = "map";
@@ -135,33 +135,36 @@ namespace planning_pkg
 
             line_marker.pose.orientation.w = 1.0;
             line_marker.scale.x = 0.05;
+            
             line_marker.color.r = 0.0;
             line_marker.color.g = 1.0;
             line_marker.color.b = 0.0;
             line_marker.color.a = 0.8;
 
             geometry_msgs::msg::Point start_point;
-            start_point.x = std::get<2>(line_data).first;
-            start_point.y = std::get<2>(line_data).second;
-            start_point.z = std::get<1>(line_data);
+            start_point.x = line.x_start;
+            start_point.y = line.y;
+            start_point.z = 0.02;
 
             geometry_msgs::msg::Point end_point;
-            end_point.x = std::get<3>(line_data).first;
-            end_point.y = std::get<3>(line_data).second;
-            end_point.z = std::get<1>(line_data);
+            end_point.x = line.x_end;
+            end_point.y = line.y;
+            end_point.z = 0.02;
 
             line_marker.points.push_back(start_point);
             line_marker.points.push_back(end_point);
+
+            line_marker.lifetime = rclcpp::Duration::from_seconds(0); // Permanente
 
             marker_array.markers.push_back(line_marker);
         }
 
         pub_vertical_line->publish(marker_array);
-        RCLCPP_INFO(node_->get_logger(), "Published %zu line markers for visualization",
+        RCLCPP_INFO(node_->get_logger(), "Published %zu horizontal line markers for visualization",
                     marker_array.markers.size());
     }
 
-    //prm visualizer methods
+    // prm visualizer methods
     void VisualizationUtils::vis_arcs(const std::vector<std::vector<int>> &arc_list,
                                       const std::vector<std::pair<double, double>> &points_line,
                                       const std::vector<std::pair<double, double>> &points_centroids)
