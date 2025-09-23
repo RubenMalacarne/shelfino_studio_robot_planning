@@ -52,8 +52,11 @@ If you prefer you can see this video tutorial: [Video Tutorial](https://drive.go
 
    ```bash
    git clone https://github.com/RubenMalacarne/shelfino_studio_robot_planning.git src
-   git submodule update --init --recursive
    cd src
+   git submodule update --init --recursive
+   cd joy_manager_ros2
+   git checkout robot_planning
+   cd ..
    ```
 
 3. **Allow Docker to Access X Server**: To enable GUI applications within the Docker container, you need to allow access to your X server. Run the following command:
