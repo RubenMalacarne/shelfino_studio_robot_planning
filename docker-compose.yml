@@ -16,6 +16,8 @@ services:
       - ./:/ros2_ws/src
       - /tmp/.X11-unix:/tmp/.X11-unix
       - /tmp/.docker.xauth:/tmp/.docker.xauth:rw
+      - /dev/input:/dev/input
+      - /dev/bus/usb:/dev/bus/usb
     environment:
       - DISPLAY=${DISPLAY}
       - LIBGL_ALWAYS_INDIRECT=0
@@ -23,8 +25,7 @@ services:
       - ROS_DOMAIN_ID=0
       - CYCLONEDDS_URI=file:///ros2_ws/cyclonedds.xml
     devices:
-      - /dev/input:/dev/input
-      - /dev/bus/usb:/dev/bus/usb
+      - /dev/input/js0:/dev/input/js0
     privileged: true
     command: bash
 
